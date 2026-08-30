@@ -1,0 +1,29 @@
+[project]
+name = "shopping-agent"
+version = "0.1.0"
+description = "Multi-platform shopping comparison & recommendation agent"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2",
+    "python-dateutil>=2.8",
+]
+
+[project.optional-dependencies]
+agent = [
+    "langchain-core>=0.2",
+    "langgraph>=0.2",
+]
+dev = [
+    "pytest>=7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

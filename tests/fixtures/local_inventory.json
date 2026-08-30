@@ -1,0 +1,13 @@
+{
+  "_note": "Seeded stand-in for a retail-partner store-inventory feed. Used by the pickup tool's store_pickup path. NOT a real API.",
+  "stores": [
+    {"store_id": "orchard", "name": "Orchard Flagship", "location": "Orchard Road, Singapore"},
+    {"store_id": "jurong", "name": "Jurong Point", "location": "Jurong West, Singapore"},
+    {"store_id": "tampines", "name": "Tampines Hub", "location": "Tampines, Singapore"}
+  ],
+  "inventory": [
+    {"product_id": "amazon:B0EARBUD01", "store_id": "orchard", "in_stock": true, "ready_in_hours": 4},
+    {"product_id": "shopee:SP4521EAR", "store_id": "tampines", "in_stock": true, "ready_in_hours": 24},
+    {"product_id": "shopee:SP4521EAR", "store_id": "jurong", "in_stock": false, "ready_in_hours": null}
+  ]
+}
