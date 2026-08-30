@@ -1,4 +1,4 @@
-"""Pure routing decisions driven solely by the latest shared state."""
+"""Pure routing decisions driven solely by structured shared state."""
 
 from typing import Literal
 
@@ -11,30 +11,29 @@ NextAction = Literal[
 
 
 def next_action(state: ShoppingState) -> NextAction:
-    """Select exactly one next operation; this never creates a full plan."""
-    if state["last_user_message"].strip():
-        return "interpret_user_input"
+    """Return one operation without mutating state, parsing text, or calling an LLM."""
     if state["finished"]:
+        return "end"
+    if state["input_status"] == "uninterpreted":
+        return "interpret_user_input"
+    if state["awaiting_user_input"]:
         return "end"
     if state["user_intent"] == "finish":
         return "terminate"
-    if state["awaiting_user_input"]:
-        return "end"
-    if state["user_intent"] == "purchase":
+    if state["purchase_status"] == "requested":
         return "add_to_cart"
     if state["pending_requirement_text"] is not None:
         return "extract_requirements"
-    requirements = state["requirements"]
-    if requirements is None or requirements.missing_fields:
+    if state["requirement_status"] != "ready":
         return "ask_clarification"
-    if state["search_required"] or not state["search_completed"]:
+    if state["search_required"]:
         return "search_products"
-    if not state["qualified_products"]:
+    if state["search_result_status"] == "no_results":
         return "ask_clarification"
-    if not state["reviews_attempted"]:
+    if state["review_status"] == "pending":
         return "fetch_reviews"
-    if not state["ranked_products"]:
+    if state["ranking_status"] == "pending":
         return "rank_products"
-    if not state["displayed"]:
+    if state["presentation_status"] == "ready":
         return "display_results"
     return "end"

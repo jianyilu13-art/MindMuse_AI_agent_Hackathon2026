@@ -15,8 +15,20 @@ python3 -m pip install -e .
 python3 -m shopping_agent.main
 ```
 
-Enter a shopping request when prompted. Type `exit` or `quit` to leave. The
-default graph uses mock services and does not require a Groq API key.
+Set `GROQ_API_KEY` in a local `.env` file (copy `.env.example`; do not commit
+the key), then enter a shopping request. Type `exit` or `quit` to leave. The
+CLI uses mock commerce tools and real LLM interpretation.
+
+## Automated mock flow
+
+The integration tests replace the LLM, product search, reviews, and cart with
+test-only deterministic adapters. They exercise the full graph without a key
+or any external marketplace service.
+
+```bash
+python3 -m pip install -e '.[test]'
+pytest
+```
 
 ## Architecture
 

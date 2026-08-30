@@ -14,5 +14,14 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "-p no:launch_testing"
+testpaths = ["tests"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

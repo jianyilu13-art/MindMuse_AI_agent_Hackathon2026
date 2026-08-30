@@ -29,6 +29,8 @@ def run() -> None:
 
         # The graph receives the complete prior state plus only the new turn.
         state["last_user_message"] = user_message
+        state["input_status"] = "uninterpreted"
+        state["awaiting_user_input"] = False
         state = graph.invoke(state)
 
         if response := state.get("assistant_message"):
