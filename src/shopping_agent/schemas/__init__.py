@@ -1,5 +1,18 @@
-from .product import Product, RankedProduct
-from .review import Review, ReviewSummary
-from .user_requirements import UserRequirements
+"""Public schema exports."""
 
-__all__ = ["Product", "RankedProduct", "Review", "ReviewSummary", "UserRequirements"]
+from .product import Product, RankedProduct
+from .review import ReviewSummary
+from .user_requirements import (
+    ProductAttributeProposal,
+    RequirementAssessment,
+    UserRequirements,
+)
+
+__all__ = [
+    "Product",
+    "RankedProduct",
+    "ReviewSummary",
+    "ProductAttributeProposal",
+    "RequirementAssessment",
+    "UserRequirements",
+]

@@ -7,10 +7,17 @@ from .routing import NextAction, next_action
 from .state import ShoppingState
 
 
-def build_shopping_graph(services: ShoppingServices | None = None):
-    """Build a graph that re-evaluates `next_action` after every node."""
-    nodes = ShoppingNodes(services or ShoppingServices.mock())
+def build_shopping_graph(
+    services: ShoppingServices | None = None,
+):
+    """Build and compile the reactive shopping graph."""
+
+    nodes = ShoppingNodes(
+        services=services or ShoppingServices.mock()
+    )
+
     graph = StateGraph(ShoppingState)
+
     actions = {
         "interpret_user_input": nodes.interpret_user_input,
         "extract_requirements": nodes.extract_requirements,
@@ -22,12 +29,27 @@ def build_shopping_graph(services: ShoppingServices | None = None):
         "add_to_cart": nodes.add_to_cart,
         "terminate": nodes.terminate,
     }
-    for name, node in actions.items():
-        graph.add_node(name, node)
 
-    path_map = {name: name for name in actions}
+    for action_name, action_node in actions.items():
+        graph.add_node(action_name, action_node)
+
+    path_map: dict[str, str] = {
+        action_name: action_name
+        for action_name in actions
+    }
     path_map["end"] = END
-    graph.add_conditional_edges(START, next_action, path_map)
-    for name in actions:
-        graph.add_conditional_edges(name, next_action, path_map)
+
+    graph.add_conditional_edges(
+        START,
+        next_action,
+        path_map,
+    )
+
+    for action_name in actions:
+        graph.add_conditional_edges(
+            action_name,
+            next_action,
+            path_map,
+        )
+
     return graph.compile()
