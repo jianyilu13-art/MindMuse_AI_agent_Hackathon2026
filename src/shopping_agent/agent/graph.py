@@ -9,7 +9,7 @@ from .state import ShoppingState
 
 def build_shopping_graph(services: ShoppingServices | None = None):
     """Build a graph that re-evaluates `next_action` after every node."""
-    nodes = ShoppingNodes(services or ShoppingServices.mock())
+    nodes = ShoppingNodes(services or ShoppingServices.from_environment())
     graph = StateGraph(ShoppingState)
     actions = {
         "interpret_user_input": nodes.interpret_user_input,

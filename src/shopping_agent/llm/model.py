@@ -37,19 +37,17 @@ class GroqModel:
         self.temperature = temperature
         self.max_tokens = max_tokens
 
-        if client is not None:
-            self.client = client
-            return
-
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "GROQ_API_KEY is missing. Add it to a .env file or set it in your shell."
-            )
-        self.client = Groq(api_key=api_key, timeout=30.0, max_retries=2)
+        self.client = client
+        self.api_key = os.getenv("GROQ_API_KEY")
 
     def complete(self, messages: Sequence[ChatMessage]) -> str:
         """Return the model's text answer for a complete conversation."""
+        if self.client is None:
+            if not self.api_key:
+                raise ValueError(
+                    "GROQ_API_KEY is missing. Add it to a .env file or set it in your shell."
+                )
+            self.client = Groq(api_key=self.api_key, timeout=30.0, max_retries=2)
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -72,6 +70,10 @@ class GroqModel:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         return self.complete(messages)
+
+    def generate(self, system_prompt: str, user_prompt: str) -> str:
+        """Generate a response from an explicit system and user prompt pair."""
+        return self.ask(user_prompt, system_prompt=system_prompt)
 
 
 DEFAULT_SHOPPING_SYSTEM_PROMPT = """You are a helpful shopping assistant.

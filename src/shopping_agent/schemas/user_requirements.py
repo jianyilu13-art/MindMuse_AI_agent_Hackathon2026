@@ -16,6 +16,7 @@ class UserRequirements(BaseModel):
     must_have: list[str] = Field(default_factory=list)
     preferred_brands: list[str] = Field(default_factory=list)
     preferred_platforms: list[str] = Field(default_factory=list)
+    ranking_priorities: list[str] = Field(default_factory=list)
     no_preference_fields: list[str] = Field(default_factory=list)
 
     @field_validator("query")

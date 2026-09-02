@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 
 from shopping_agent.llm.model import GroqModel
 from shopping_agent.llm.parsing import GroqShoppingSemantics, ShoppingSemantics
@@ -23,6 +24,23 @@ class ShoppingServices:
     def mock(cls, semantics: ShoppingSemantics | None = None) -> "ShoppingServices":
         """Mock external commerce tools while retaining LLM-based interpretation."""
         return cls(MockProductSearchTool(), MockReviewTool(), MockAddToCartTool(), semantics or GroqShoppingSemantics(GroqModel()))
+
+    @classmethod
+    def from_environment(cls, semantics: ShoppingSemantics | None = None) -> "ShoppingServices":
+        """Choose mock tools by default; real adapters are opt-in via configuration."""
+        mode = os.getenv("SHOPPING_TOOL_MODE", "mock").strip().lower()
+        if mode == "mock":
+            return cls.mock(semantics)
+        if mode == "real":
+            from shopping_agent.tools_real import RealAddToCartTool, RealProductSearchTool, RealReviewTool
+
+            return cls(
+                RealProductSearchTool(),
+                RealReviewTool(),
+                RealAddToCartTool(),
+                semantics or GroqShoppingSemantics(GroqModel()),
+            )
+        raise ValueError("SHOPPING_TOOL_MODE must be either 'mock' or 'real'.")
 
 
 class ShoppingNodes:

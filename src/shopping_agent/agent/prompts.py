@@ -15,11 +15,13 @@ REQUIREMENT_EXTRACTION_PROMPT = """Extract shopping requirements from the shoppe
 assess whether this particular request is ready for a useful search. Return JSON only:
 {{"requirements":{{"query":string|null,"size":string|null,"max_price":number|null,"arrival_by":YYYY-MM-DD|null,
 "must_have":[string],"preferred_brands":[string],"preferred_platforms":[string],
-"no_preference_fields":[string]}},"assessment":{{"sufficient_for_search":boolean,
+"ranking_priorities":[string],"no_preference_fields":[string]}},"assessment":{{"sufficient_for_search":boolean,
 "missing_required_information":[string],"optional_preferences":[string],
 "clarification_context":string|null}},"clarification_question":string|null}}.
 
-Only treat information as required when necessary for a useful search. Brand, colour, and
+Only record ranking priorities explicitly stated by the shopper (for example price, rating,
+reviews, or delivery speed). If none are stated, leave ranking_priorities empty. Only treat
+information as required when necessary for a useful search. Brand, colour, and
 every possible feature are not automatically required. Record an explicit "I don't care" or
 "any is fine" in no_preference_fields. Preserve known values unless the shopper changes them.
 Do not invent prices, dates, sizes, or preferences. When asked to generate a clarification,
@@ -39,16 +41,23 @@ Optional preferences: {optional_preferences}
 Context: {clarification_context}
 """
 
+SHOPPING_AGENT_SYSTEM_PROMPT = """You are a careful shopping assistant. Never invent
+product facts, prices, availability, delivery dates, or reviews. Ask a concise clarification
+when a critical requirement is genuinely missing."""
+
 REVIEW_ANALYSIS_PROMPT = """Summarize these reviews for a shopper. Return JSON only with
 sentiment, highlights, and concerns. Do not claim facts absent from reviews.
 
 Reviews: {reviews}
 """
 
-PRODUCT_RANKING_PROMPT = """Describe shopper-relevant trade-offs among the supplied
+RANKING_PROMPT = """Describe shopper-relevant trade-offs among the supplied
 already-qualified products. Do not remove products or decide hard constraints;
 price and delivery eligibility have already been handled by Python.
 
 Requirements: {requirements}
 Products: {products}
 """
+
+# Backward-compatible name used by any existing callers.
+PRODUCT_RANKING_PROMPT = RANKING_PROMPT

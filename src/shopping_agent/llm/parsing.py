@@ -7,7 +7,12 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from shopping_agent.agent.prompts import CLARIFICATION_PROMPT, INPUT_INTERPRETATION_PROMPT, REQUIREMENT_EXTRACTION_PROMPT
+from shopping_agent.agent.prompts import (
+    CLARIFICATION_PROMPT,
+    INPUT_INTERPRETATION_PROMPT,
+    REQUIREMENT_EXTRACTION_PROMPT,
+    SHOPPING_AGENT_SYSTEM_PROMPT,
+)
 from shopping_agent.llm.model import GroqModel
 from shopping_agent.schemas import Product, RequirementAssessment, UserRequirements
 
@@ -38,14 +43,14 @@ class GroqShoppingSemantics:
         self.model = model
 
     def interpret_input(self, message: str, requirements: UserRequirements | None, products: list[Product]) -> InputInterpretation:
-        response = self.model.ask(INPUT_INTERPRETATION_PROMPT.format(
+        response = self.model.generate(SHOPPING_AGENT_SYSTEM_PROMPT, INPUT_INTERPRETATION_PROMPT.format(
             message=message, current_requirements=requirements.model_dump() if requirements else {},
             products=[product.model_dump() for product in products],
         ))
         return InputInterpretation.model_validate(_json_object(response))
 
     def extract_requirements(self, message: str, current: UserRequirements | None) -> RequirementExtraction:
-        response = self.model.ask(REQUIREMENT_EXTRACTION_PROMPT.format(
+        response = self.model.generate(SHOPPING_AGENT_SYSTEM_PROMPT, REQUIREMENT_EXTRACTION_PROMPT.format(
             message=message, current_requirements=current.model_dump() if current else {},
         ))
         extracted = RequirementExtraction.model_validate(_json_object(response))
@@ -53,7 +58,7 @@ class GroqShoppingSemantics:
         return extracted
 
     def write_clarification(self, assessment: RequirementAssessment, requirements: UserRequirements | None) -> str:
-        response = self.model.ask(CLARIFICATION_PROMPT.format(
+        response = self.model.generate(SHOPPING_AGENT_SYSTEM_PROMPT, CLARIFICATION_PROMPT.format(
             requirements=requirements.model_dump() if requirements else {},
             missing_required_information=assessment.missing_required_information,
             optional_preferences=assessment.optional_preferences,
