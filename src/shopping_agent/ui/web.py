@@ -174,8 +174,7 @@ def _status_box() -> str:
 
 
 def _page(session: ChatSession) -> str:
-    disabled = "disabled" if session.done else ""
-    placeholder = "Muse is ready — start a new chat" if session.done else "Type your reply…"
+    placeholder = "Type a product to start again…" if session.done else "Type your reply…"
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -206,8 +205,8 @@ def _page(session: ChatSession) -> str:
         "<span class=online>Ready</span></div>"
         f"<div class=messages>{_messages_html(session)}</div>"
         "<form class=composer method=post action=/>"
-        f"<input name=msg autocomplete=off placeholder='{placeholder}' {disabled} autofocus>"
-        f"<button class=send type=submit {disabled}>&uarr;</button>"
+        f"<input name=msg autocomplete=off placeholder='{placeholder}' autofocus>"
+        "<button class=send type=submit>&uarr;</button>"
         "</form></div>"
         f"{_results_html(session)}"
         "</div></main></div></body></html>"
@@ -250,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
         data = parse_qs(self.rfile.read(length).decode("utf-8")) if length else {}
         msg = (data.get("msg", [""])[0] or "").strip()
         if msg:
+            if session.done:  # finished a chat -> any new message starts a fresh one
+                session = _SESSIONS[sid] = ChatSession()
             try:
                 handle_message(session, msg)
             except Exception as exc:  # keep the chat alive
