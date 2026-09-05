@@ -198,6 +198,9 @@ def search_products(
 ) -> list[Product]:
     """Search + normalise. No filtering/ranking here — that's the recommendation
     layer's job. Returns unified Product objects the back half can consume."""
-    api_key = api_key or os.getenv("SEARCHAPI_API_KEY")
+    if api_key is None:
+        from shopping_agent.config import searchapi_key
+
+        api_key = searchapi_key()
     raw = _fetch_raw(build_query(reqs), api_key)
     return normalize(raw)

@@ -52,6 +52,7 @@ CSS = """
   .status-box{margin-top:auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);
     border-radius:15px;padding:13px;font-size:12px;color:#c7c3d9}
   .status-dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:var(--orange);margin-right:7px}
+  .status-dot.live{background:var(--green)}
   .main{display:flex;flex-direction:column}
   .topbar{height:70px;padding:0 42px;display:flex;align-items:center;justify-content:space-between;
     border-bottom:1px solid var(--line);background:rgba(255,255,255,.75)}
@@ -162,6 +163,16 @@ def _messages_html(session: ChatSession) -> str:
     return "".join(rows)
 
 
+def _status_box() -> str:
+    from shopping_agent.config import searchapi_key
+
+    if searchapi_key():
+        return ("<div class=status-box><span class='status-dot live'></span>"
+                "Live · Google Shopping · no order is ever placed</div>")
+    return ("<div class=status-box><span class=status-dot></span>"
+            "Offline demo · seeded search · no order is ever placed</div>")
+
+
 def _page(session: ChatSession) -> str:
     disabled = "disabled" if session.done else ""
     placeholder = "Muse is ready — start a new chat" if session.done else "Type your reply…"
@@ -180,7 +191,7 @@ def _page(session: ChatSession) -> str:
         "<li class=step><span class=n>2</span><div><b>Answer a couple of questions</b><span>Size, budget, preferences.</span></div></li>"
         "<li class=step><span class=n>3</span><div><b>Compare &amp; check out</b><span>Real picks, pickup, returns.</span></div></li>"
         "</ol>"
-        "<div class=status-box><span class=status-dot></span>Offline demo · seeded search · no order is ever placed</div>"
+        f"{_status_box()}"
         "</aside>"
         "<main class=main>"
         "<div class=topbar><span class=topbar-title>AI-powered product discovery</span>"
