@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Optional
@@ -193,6 +194,30 @@ def normalize(raw_results: list[dict[str, Any]]) -> list[Product]:
 # --------------------------------------------------------------------------
 # public entrypoint
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# tiny query cache — only for LIVE results, to save API credits and blunt abuse.
+# Budget/deadline are applied downstream (in recommendation), not in the query,
+# so results for the same query string are reusable across requests.
+# --------------------------------------------------------------------------
+_CACHE: dict[str, tuple[float, list[Product]]] = {}
+_CACHE_TTL = float(os.getenv("SEARCH_CACHE_TTL", "600"))  # seconds
+_CACHE_MAX = 128
+
+
+def _cache_get(key: str) -> Optional[list[Product]]:
+    hit = _CACHE.get(key)
+    if hit and (time.time() - hit[0]) < _CACHE_TTL:
+        return hit[1]
+    _CACHE.pop(key, None)
+    return None
+
+
+def _cache_put(key: str, value: list[Product]) -> None:
+    if len(_CACHE) >= _CACHE_MAX:
+        _CACHE.pop(next(iter(_CACHE)), None)  # drop oldest inserted
+    _CACHE[key] = (time.time(), value)
+
+
 def search_products(
     reqs: UserRequirements, *, api_key: Optional[str] = None
 ) -> list[Product]:
@@ -202,5 +227,15 @@ def search_products(
         from shopping_agent.config import searchapi_key
 
         api_key = searchapi_key()
-    raw = _fetch_raw(build_query(reqs), api_key)
-    return normalize(raw)
+
+    query = build_query(reqs)
+    if api_key:  # cache live results only (offline fixture is already free)
+        cached = _cache_get(query)
+        if cached is not None:
+            return cached
+
+    products = normalize(_fetch_raw(query, api_key))
+
+    if api_key:
+        _cache_put(query, products)
+    return products

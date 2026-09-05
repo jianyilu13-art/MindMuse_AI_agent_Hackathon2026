@@ -12,6 +12,7 @@ seeded search fixture, or real Google Shopping with SEARCHAPI_API_KEY.
 from __future__ import annotations
 
 import html
+import os
 import sys
 import uuid
 from http.cookies import SimpleCookie
@@ -263,9 +264,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    print(f"Muse UI  ->  http://127.0.0.1:{PORT}", flush=True)
+    # HOST/PORT come from the environment so the same code runs locally
+    # (127.0.0.1) and on a host/PaaS (0.0.0.0, platform-assigned $PORT).
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", str(PORT)))
+    print(f"Muse UI  ->  http://{host}:{port}", flush=True)
     try:
-        ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+        ThreadingHTTPServer((host, port), Handler).serve_forever()
     except KeyboardInterrupt:
         sys.exit(0)
 

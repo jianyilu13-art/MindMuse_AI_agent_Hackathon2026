@@ -155,6 +155,13 @@ Prefer not to use a file? Pass it inline for one run:
 SEARCHAPI_API_KEY=your_key_here python -m shopping_agent.ui
 ```
 
+### Deploy it live for everyone (one key, no per-user setup)
+
+Host the app with a single `SEARCHAPI_API_KEY` set on the server and **every
+visitor gets live results through that one key** — they never sign up or
+configure anything. A `Dockerfile` and `Procfile` are included; see
+**[DEPLOY.md](DEPLOY.md)** for ngrok / Render / Railway / VPS steps.
+
 > **Security:** `.env` is listed in `.gitignore`, so your key stays local and is
 > never committed. If a key is ever exposed, regenerate it in the SearchAPI
 > dashboard.
