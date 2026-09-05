@@ -73,7 +73,17 @@ def _matches_brand(
 ) -> bool:
     """Match the shopper's preferred brands."""
 
-    if not requirements.preferred_brands:
+    requested_brands = list(requirements.preferred_brands)
+    attribute_brand = requirements.attributes.get("brand")
+
+    if attribute_brand not in (None, "", [], {}):
+        requested_brands = (
+            list(attribute_brand)
+            if isinstance(attribute_brand, (list, tuple, set))
+            else [str(attribute_brand)]
+        )
+
+    if not requested_brands:
         return True
 
     product_brand = str(
@@ -81,8 +91,8 @@ def _matches_brand(
     ).strip().lower()
 
     preferred_brands = {
-        brand.strip().lower()
-        for brand in requirements.preferred_brands
+        str(brand).strip().lower()
+        for brand in requested_brands
     }
 
     return product_brand in preferred_brands

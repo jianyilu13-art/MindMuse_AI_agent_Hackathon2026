@@ -5,6 +5,7 @@ from .review import ReviewSummary
 from .user_requirements import (
     ProductAttributeProposal,
     RequirementAssessment,
+    ShoppingToolInput,
     UserRequirements,
 )
 
@@ -14,5 +15,6 @@ __all__ = [
     "ReviewSummary",
     "ProductAttributeProposal",
     "RequirementAssessment",
+    "ShoppingToolInput",
     "UserRequirements",
 ]

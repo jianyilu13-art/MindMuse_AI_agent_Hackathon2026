@@ -12,6 +12,7 @@ from .fetch_reviews import (
 from .search_products import (
     MockProductSearchTool,
     ProductSearchTool,
+    build_shopping_tool_input,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "MockReviewTool",
     "ProductSearchTool",
     "ReviewTool",
+    "build_shopping_tool_input",
 ]

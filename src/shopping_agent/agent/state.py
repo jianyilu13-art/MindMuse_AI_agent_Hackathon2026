@@ -9,6 +9,7 @@ from shopping_agent.schemas import (
     ProductAttributeProposal,
     RankedProduct,
     ReviewSummary,
+    ShoppingToolInput,
     UserRequirements,
 )
 from shopping_agent.tools.add_to_cart import CartResult
@@ -65,6 +66,7 @@ class ShoppingState(TypedDict):
     search_required: bool
     search_completed: bool
     search_result_status: SearchResultStatus
+    search_tool_input: ShoppingToolInput | None
     raw_products: list[Product]
     qualified_products: list[Product]
 
@@ -78,6 +80,7 @@ class ShoppingState(TypedDict):
     # Presentation and action state.
     display_offset: int
     page_size: int
+    visible_products: list[Product]
     presentation_status: PresentationStatus
     selected_product_id: str | None
     purchase_status: PurchaseStatus
@@ -109,6 +112,7 @@ def initial_state(message: str = "") -> ShoppingState:
         "search_required": False,
         "search_completed": False,
         "search_result_status": "not_searched",
+        "search_tool_input": None,
         "raw_products": [],
         "qualified_products": [],
         "reviews": {},
@@ -118,6 +122,7 @@ def initial_state(message: str = "") -> ShoppingState:
         "ranked_products": [],
         "display_offset": 0,
         "page_size": 3,
+        "visible_products": [],
         "presentation_status": "not_ready",
         "selected_product_id": None,
         "purchase_status": "none",

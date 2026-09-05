@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
-from shopping_agent.schemas import Product, UserRequirements
+from shopping_agent.schemas import (
+    Product,
+    ShoppingToolInput,
+    UserRequirements,
+)
 
 
 class ProductSearchTool(Protocol):
@@ -13,9 +17,60 @@ class ProductSearchTool(Protocol):
 
     def search(
         self,
-        requirements: UserRequirements,
+        request: ShoppingToolInput,
     ) -> list[Product]:
         ...
+
+
+def build_shopping_tool_input(
+    requirements: UserRequirements,
+) -> ShoppingToolInput:
+    """Convert agent-owned requirements into the stable tool contract.
+
+    Common constraints are copied into ``attributes`` because the Framework
+    tool should not need to understand the agent's ``UserRequirements`` model.
+    Values are JSON-compatible so the exact request can be logged or sent over
+    an API without another conversion step.
+    """
+
+    attributes = dict(requirements.attributes)
+
+    if requirements.size:
+        attributes.setdefault("size", requirements.size)
+
+    if requirements.max_price is not None:
+        attributes["max_price"] = requirements.max_price
+
+    if requirements.arrival_by is not None:
+        attributes["arrival_by"] = requirements.arrival_by.isoformat()
+
+    if requirements.preferred_brands:
+        attributes.setdefault(
+            "brand",
+            (
+                requirements.preferred_brands[0]
+                if len(requirements.preferred_brands) == 1
+                else requirements.preferred_brands
+            ),
+        )
+
+    if requirements.preferred_platforms:
+        attributes.setdefault(
+            "platform",
+            (
+                requirements.preferred_platforms[0]
+                if len(requirements.preferred_platforms) == 1
+                else requirements.preferred_platforms
+            ),
+        )
+
+    if requirements.must_have:
+        attributes.setdefault("must_have", list(requirements.must_have))
+
+    return ShoppingToolInput(
+        category=requirements.category or requirements.query or "general",
+        attributes=attributes,
+    )
 
 
 class MockProductSearchTool:
@@ -23,21 +78,38 @@ class MockProductSearchTool:
 
     def search(
         self,
-        requirements: UserRequirements,
+        request: ShoppingToolInput | UserRequirements,
     ) -> list[Product]:
-        category = (
-            requirements.category or "general"
-        ).strip().lower()
+        if isinstance(request, UserRequirements):
+            request = build_shopping_tool_input(request)
 
-        query = requirements.query or "product"
+        category = request.category.strip().lower()
 
-        if category in {"shoe", "shoes", "footwear"}:
+        query = str(
+            request.attributes.get("query")
+            or category.replace("_", " ")
+            or "product"
+        )
+
+        if category in {
+            "shoe",
+            "shoes",
+            "footwear",
+            "running_shoes",
+            "sneakers",
+        }:
             return self._search_shoes(query)
 
-        if category in {"food", "snack", "snacks"}:
+        if category in {"food", "snack", "snacks", "groceries"}:
             return self._search_food(query)
 
-        if category in {"laptop", "laptops", "computer", "computers"}:
+        if category in {
+            "laptop",
+            "laptops",
+            "computer",
+            "computers",
+            "notebook",
+        }:
             return self._search_laptops(query)
 
         return self._search_general(query)
@@ -58,7 +130,7 @@ class MockProductSearchTool:
                 arrival_date=date(2026, 9, 2),
                 attributes={
                     "brand": "Stride",
-                    "sizes": ["40", "41", "42"],
+                    "sizes": ["37", "38", "40", "41", "42"],
                     "usage": ["running"],
                     "color": ["black"],
                     "material": ["mesh"],
@@ -92,7 +164,7 @@ class MockProductSearchTool:
                 arrival_date=date(2026, 9, 1),
                 attributes={
                     "brand": "Stride",
-                    "sizes": ["39", "40", "41", "42"],
+                    "sizes": ["37", "39", "40", "41", "42"],
                     "usage": ["running", "training"],
                     "color": ["blue"],
                     "material": ["mesh", "foam"],

@@ -73,6 +73,30 @@ class UserRequirements(BaseModel):
         return value.strip() if value else None
 
 
+class ShoppingToolInput(BaseModel):
+    """Stable input contract shared with the marketplace search tool.
+
+    The agent owns conversation state and requirement interpretation. The
+    search tool only receives a category plus normalized product attributes.
+    Keeping this boundary small makes it possible to replace the local mock
+    search implementation with the Framework team's tool later.
+    """
+
+    category: str = Field(min_length=1)
+    attributes: dict[str, Any]
+
+    @field_validator("category")
+    @classmethod
+    def normalize_category(cls, value: str) -> str:
+        return value.strip().lower().replace(" ", "_")
+
+    @property
+    def query(self) -> str:
+        """Compatibility view for older search adapters."""
+
+        return str(self.attributes.get("query") or self.category)
+
+
 class RequirementAssessment(BaseModel):
     """LLM assessment of the current product requirements."""
 

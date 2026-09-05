@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from shopping_agent.llm.model import GroqModel
 from shopping_agent.llm.parsing import (
     GroqShoppingSemantics,
+    RuleBasedShoppingSemantics,
     ShoppingSemantics,
 )
 from shopping_agent.processing import (
@@ -21,6 +20,7 @@ from shopping_agent.tools import (
     MockReviewTool,
     ProductSearchTool,
     ReviewTool,
+    build_shopping_tool_input,
 )
 from shopping_agent.tools.add_to_cart import CartResult
 from shopping_agent.schemas import RequirementAssessment
@@ -48,14 +48,52 @@ class ShoppingServices:
         cls,
         semantics: ShoppingSemantics | None = None,
     ) -> "ShoppingServices":
-        """Create services with mock commerce integrations."""
+        """Create local commerce services with Groq when configured.
+
+        The search, review, and cart integrations remain deterministic mocks
+        until marketplace adapters are supplied. Semantic operations use
+        Groq whenever ``GROQ_API_KEY`` is present; otherwise a small local
+        adapter keeps the demo and UI runnable without credentials.
+        """
+
+        if semantics is None:
+            semantics = cls._semantic_service_from_env()
 
         return cls(
             search=MockProductSearchTool(),
             reviews=MockReviewTool(),
             cart=MockAddToCartTool(),
-            semantics=semantics or GroqShoppingSemantics(GroqModel()),
+            semantics=semantics,
         )
+
+    @classmethod
+    def from_env(
+        cls,
+        *,
+        search: ProductSearchTool | None = None,
+        reviews: ReviewTool | None = None,
+        cart: AddToCartTool | None = None,
+    ) -> "ShoppingServices":
+        """Create the default application services from environment config."""
+
+        return cls(
+            search=search or MockProductSearchTool(),
+            reviews=reviews or MockReviewTool(),
+            cart=cart or MockAddToCartTool(),
+            semantics=cls._semantic_service_from_env(),
+        )
+
+    @staticmethod
+    def _semantic_service_from_env() -> ShoppingSemantics:
+        """Select the real Groq adapter or the local no-key fallback."""
+
+        try:
+            return GroqShoppingSemantics(GroqModel())
+        except ValueError as error:
+            if "GROQ_API_KEY" not in str(error):
+                raise
+
+        return RuleBasedShoppingSemantics()
 
 
 class ShoppingNodes:
@@ -77,11 +115,20 @@ class ShoppingNodes:
         if not known_products:
             known_products = state["raw_products"]
 
-        decision = self.services.semantics.interpret_input(
-            message=message,
-            requirements=state["requirements"],
-            products=known_products,
-        )
+        try:
+            decision = self.services.semantics.interpret_input(
+                message=message,
+                requirements=state["requirements"],
+                products=known_products,
+            )
+        except Exception as error:
+            return {
+                "last_user_message": "",
+                "input_status": "interpreted",
+                "assistant_message": _semantic_error_message(error),
+                "awaiting_user_input": True,
+                "last_error": str(error),
+            }
 
         update: dict = {
             "last_user_message": "",
@@ -90,6 +137,7 @@ class ShoppingNodes:
             "selected_product_id": decision.selected_product_id,
             "assistant_message": None,
             "last_error": None,
+            "awaiting_user_input": False,
         }
 
         if decision.intent == "finish":
@@ -125,10 +173,18 @@ class ShoppingNodes:
     def extract_requirements(self, state: ShoppingState) -> dict:
         """Extract category-specific requirements using the LLM."""
 
-        extracted = self.services.semantics.extract_requirements(
-            message=state["pending_requirement_text"] or "",
-            current=state["requirements"],
-        )
+        try:
+            extracted = self.services.semantics.extract_requirements(
+                message=state["pending_requirement_text"] or "",
+                current=state["requirements"],
+            )
+        except Exception as error:
+            return {
+                "assistant_message": _semantic_error_message(error),
+                "awaiting_user_input": True,
+                "pending_requirement_text": None,
+                "last_error": str(error),
+            }
 
         requirements = extracted.requirements
         assessment = extracted.assessment
@@ -162,6 +218,7 @@ class ShoppingNodes:
             "search_required": requirement_status == "ready",
             "search_completed": False,
             "search_result_status": "not_searched",
+            "search_tool_input": None,
             "raw_products": [],
             "qualified_products": [],
             "reviews": {},
@@ -170,6 +227,7 @@ class ShoppingNodes:
             "ranking_status": "not_needed",
             "ranked_products": [],
             "display_offset": 0,
+            "visible_products": [],
             "presentation_status": "not_ready",
             "selected_product_id": None,
             "purchase_status": "none",
@@ -211,9 +269,34 @@ class ShoppingNodes:
             clarification_context=context,
         )
 
-        message = self.services.semantics.write_clarification(
-            assessment=assessment,
-            requirements=requirements,
+        try:
+            question = self.services.semantics.write_clarification(
+                assessment=assessment,
+                requirements=requirements,
+            )
+        except Exception:
+            question = _fallback_clarification_question(
+                missing=missing,
+                category=(
+                    requirements.category
+                    if requirements and requirements.category
+                    else None
+                ),
+            )
+
+        no_results = (
+            state["search_completed"]
+            and not state["qualified_products"]
+        )
+
+        message = (
+            question
+            if no_results
+            else _format_attribute_guidance(
+                question=question,
+                assessment=assessment,
+                requirements=requirements,
+            )
         )
 
         return {
@@ -242,9 +325,22 @@ class ShoppingNodes:
                 "last_error": "Requirements are missing.",
             }
 
-        raw_products = deduplicate_products(
-            self.services.search.search(requirements)
-        )
+        search_request = build_shopping_tool_input(requirements)
+
+        try:
+            raw_products = deduplicate_products(
+                self.services.search.search(search_request)
+            )
+        except Exception as error:
+            return {
+                "search_tool_input": search_request,
+                "assistant_message": (
+                    "I could not complete the product search. "
+                    "Please try again or adjust your requirements."
+                ),
+                "awaiting_user_input": True,
+                "last_error": str(error),
+            }
 
         qualified_products = apply_hard_constraints(
             products=raw_products,
@@ -256,6 +352,7 @@ class ShoppingNodes:
             "qualified_products": qualified_products,
             "search_required": False,
             "search_completed": True,
+            "search_tool_input": search_request,
             "search_result_status": (
                 "results" if qualified_products else "no_results"
             ),
@@ -265,6 +362,7 @@ class ShoppingNodes:
             "ranking_status": "not_needed",
             "ranked_products": [],
             "presentation_status": "not_ready",
+            "visible_products": [],
             "display_offset": 0,
             "missing_dynamic_attributes": [],
         }
@@ -355,6 +453,7 @@ class ShoppingNodes:
         return {
             "assistant_message": message,
             "display_offset": start + len(page),
+            "visible_products": [item.product for item in page],
             "presentation_status": (
                 "displayed" if page else "exhausted"
             ),
@@ -407,3 +506,162 @@ class ShoppingNodes:
             "assistant_message": "Thanks for shopping with me!",
             "awaiting_user_input": False,
         }
+
+
+def _semantic_error_message(error: Exception) -> str:
+    """Turn provider/configuration failures into an actionable UI message."""
+
+    detail = str(error).strip()
+
+    if "GROQ_API_KEY" in detail:
+        return (
+            "Groq is not configured yet. Add GROQ_API_KEY to your .env file, "
+            "restart the app, and try again."
+        )
+
+    return (
+        "I could not understand that shopping request because the language "
+        "model is temporarily unavailable. Please try again."
+    )
+
+
+def _fallback_clarification_question(
+    *,
+    missing: list[str],
+    category: str | None,
+) -> str:
+    """Provide a useful question even if the final wording call fails."""
+
+    labels = {
+        "size": "your size",
+        "taste": "your preferred taste",
+        "usage": "how you plan to use it",
+        "max_price": "your maximum budget",
+        "arrival_by": "your latest acceptable arrival date",
+        "category": "the product you want to buy",
+    }
+    requested = [
+        labels.get(item, item.replace("_", " "))
+        for item in missing
+    ]
+
+    if not requested:
+        return "Could you share another requirement or preference?"
+
+    prefix = f"For {category.replace('_', ' ')}, " if category else ""
+    return f"{prefix}could you provide {', '.join(requested)}?"
+
+
+def _format_attribute_guidance(
+    *,
+    question: str,
+    assessment: RequirementAssessment,
+    requirements,
+) -> str:
+    """Render the required/optional split in a human-readable message."""
+
+    category = (
+        requirements.category.replace("_", " ")
+        if requirements and requirements.category
+        else "this product"
+    )
+
+    proposals = assessment.suggested_attributes
+    required = [proposal for proposal in proposals if proposal.required]
+    optional = [proposal for proposal in proposals if not proposal.required]
+
+    known_required_names = {proposal.name for proposal in required}
+    for name in assessment.missing_required_information:
+        if name not in known_required_names:
+            required.append(
+                type(proposals[0])(
+                    name=name,
+                    attribute_type="string",
+                    required=True,
+                    reason=None,
+                )
+                if proposals
+                else _make_attribute_proposal(name)
+            )
+
+    if not required and not optional:
+        return question
+
+    lines = [
+        f"To search for {category}, please share:",
+        "",
+        "Required attributes:",
+    ]
+
+    if required:
+        lines.extend(
+            _format_proposal_line(
+                proposal,
+                requirements,
+            )
+            for proposal in required
+        )
+    else:
+        lines.append("- None — I can search with the details provided.")
+
+    lines.extend(["", "Optional attributes:"])
+
+    if optional:
+        lines.extend(
+            _format_proposal_line(
+                proposal,
+                requirements,
+            )
+            for proposal in optional
+        )
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "You can provide all the details you know in one message.",
+            "",
+            question,
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _make_attribute_proposal(name: str):
+    """Create a generic proposal for an extra required field."""
+
+    from shopping_agent.schemas import ProductAttributeProposal
+
+    return ProductAttributeProposal(
+        name=name,
+        attribute_type="string",
+        required=True,
+    )
+
+
+def _format_proposal_line(proposal, requirements) -> str:
+    """Format one attribute with its reason and current-value status."""
+
+    value = _requirement_value(requirements, proposal.name)
+    status = " (provided)" if value not in (None, "", [], {}) else ""
+    reason = f": {proposal.reason}" if proposal.reason else ""
+    return f"- {proposal.name}{status}{reason}"
+
+
+def _requirement_value(requirements, name: str):
+    """Read a named dynamic attribute from the current requirements."""
+
+    if requirements is None:
+        return None
+
+    if name == "size":
+        return requirements.size or requirements.attributes.get("size")
+
+    if name == "max_price":
+        return requirements.max_price
+
+    if name == "arrival_by":
+        return requirements.arrival_by
+
+    return requirements.attributes.get(name)

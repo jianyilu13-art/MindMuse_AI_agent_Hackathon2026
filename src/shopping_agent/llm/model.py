@@ -24,16 +24,22 @@ class ChatMessage(TypedDict):
 class GroqModel:
     """Generate shopping-assistant responses with a Groq-hosted model."""
 
+    DEFAULT_MODEL = "openai/gpt-oss-20b"
+
     def __init__(
         self,
-        model: str = "llama-3.3-70b-versatile",
+        model: str | None = None,
         *,
         temperature: float = 0.2,
-        max_tokens: int = 1_024,
+        max_tokens: int = 2_048,
         client: Groq | None = None,
     ) -> None:
         load_dotenv()
-        self.model = model
+        self.model = (
+            model
+            or os.getenv("GROQ_MODEL")
+            or self.DEFAULT_MODEL
+        )
         self.temperature = temperature
         self.max_tokens = max_tokens
 
@@ -48,15 +54,25 @@ class GroqModel:
             )
         self.client = Groq(api_key=api_key, timeout=30.0, max_retries=2)
 
-    def complete(self, messages: Sequence[ChatMessage]) -> str:
+    def complete(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        response_format: dict | None = None,
+    ) -> str:
         """Return the model's text answer for a complete conversation."""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=list(messages),
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
+            request = {
+                "model": self.model,
+                "messages": list(messages),
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+            }
+
+            if response_format is not None:
+                request["response_format"] = response_format
+
+            response = self.client.chat.completions.create(**request)
         except APIError as error:
             raise RuntimeError(f"Groq request failed: {error}") from error
 
@@ -65,13 +81,26 @@ class GroqModel:
             raise RuntimeError("Groq returned an empty response.")
         return content
 
-    def ask(self, prompt: str, *, system_prompt: str | None = None) -> str:
+    def ask(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        json_mode: bool = False,
+    ) -> str:
         """Convenience method for a single shopping-related prompt."""
         messages: list[ChatMessage] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        return self.complete(messages)
+        return self.complete(
+            messages,
+            response_format=(
+                {"type": "json_object"}
+                if json_mode
+                else None
+            ),
+        )
 
 
 DEFAULT_SHOPPING_SYSTEM_PROMPT = """You are a helpful shopping assistant.

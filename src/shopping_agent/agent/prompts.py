@@ -16,6 +16,20 @@ Return JSON only:
   "should_extract_requirements": boolean
 }}
 
+Rules:
+
+1. If the message is exactly "quit", "exit", "finish", or "done", use
+   intent "finish".
+2. If the shopper asks for more results and known products exist, use intent
+   "more_results".
+3. If the shopper wants to buy, purchase, or add a known product to cart, use
+   intent "purchase" and identify its product ID when possible.
+4. A first message that names a product or category (for example, "shoes")
+   is a new search: set should_extract_requirements to true.
+5. A reply that provides or changes an attribute (for example, "EU 39")
+   also sets should_extract_requirements to true.
+6. Do not call the search tool in this step. Only classify the message.
+
 Set should_extract_requirements to true when the message provides or changes
 shopping requirements. Do not extract detailed attribute values in this step.
 
@@ -76,10 +90,12 @@ Return JSON only:
 Rules:
 
 1. Infer the product category from the shopper's request.
-2. Propose attributes that are genuinely important for that category.
+2. Return 2 to 6 useful category-specific attributes when possible.
 3. Mark an attribute as required only when searching without it would be
-   unreliable or unusable.
-4. Do not require every possible feature.
+   unreliable or unusable. For example, shoe size is normally required for
+   shoes, while color, material, and style are normally optional.
+4. Do not require every possible feature. Budget and delivery date are
+   optional unless the shopper explicitly makes them a hard condition.
 5. Use attributes for category-specific values such as size, taste, material,
    usage, dietary restrictions, storage, or compatibility.
 6. Use max_price for the maximum acceptable price.
@@ -87,9 +103,14 @@ Rules:
 8. Do not invent prices, dates, sizes, preferences, or product facts.
 9. Preserve existing requirements unless the shopper explicitly changes them.
 10. Record "any is fine" or "I do not care" in no_preference_fields.
-11. Return missing_required_information using attribute names only.
-12. The value of sufficient_for_search must be false when a required attribute
-    is missing.
+11. Return missing_required_information using attribute names only, and
+    include every proposed required attribute that is not present.
+12. Put unfilled optional attributes in optional_preferences.
+13. The value of sufficient_for_search must be false when a required attribute
+    is missing or the category is missing.
+14. Preserve the current requirements when the latest message only supplies a
+    follow-up value. Never erase an earlier value unless the shopper changes it.
+15. Do not invent a value simply because an attribute was proposed.
 
 Shopper message:
 {message}
@@ -108,7 +129,9 @@ Return JSON only:
 
 Ask only about the missing required attributes. Use the attribute names and
 their reasons to make the question natural and useful. Do not ask again about
-information already present. Do not invent product facts.
+information already present. Do not invent product facts. Optional attributes
+are shown separately by the application and should not be requested as a
+condition for searching.
 
 Product category:
 {category}

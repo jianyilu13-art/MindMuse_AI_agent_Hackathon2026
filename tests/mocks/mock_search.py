@@ -2,12 +2,12 @@
 
 from datetime import date
 
-from shopping_agent.schemas import Product, UserRequirements
+from shopping_agent.schemas import Product, ShoppingToolInput
 
 
 class MockRunningShoeSearch:
-    def search(self, requirements: UserRequirements) -> list[Product]:
-        if not requirements.query or "shoe" not in requirements.query.lower():
+    def search(self, request: ShoppingToolInput) -> list[Product]:
+        if not request.query or "shoe" not in request.query.lower():
             return []
         return [
             Product(id="nike-pegasus-41", title="Nike Pegasus 41", price=95, platform="mock-store", url="https://mock.test/nike-pegasus-41", arrival_date=date(2026, 9, 2), rating=4.6, review_count=830, attributes={"brand": "Nike", "category": "running shoes", "sizes": "41,42,43", "cushioning": "responsive"}),
