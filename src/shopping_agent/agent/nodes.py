@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import os
 
 from shopping_agent.llm.model import GroqModel
@@ -11,6 +12,8 @@ from shopping_agent.processing import apply_hard_constraints, deduplicate_produc
 from shopping_agent.tools import AddToCartTool, MockAddToCartTool, MockProductSearchTool, MockReviewTool, ProductSearchTool, ReviewTool
 
 from .state import ShoppingState
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,7 +31,7 @@ class ShoppingServices:
     @classmethod
     def from_environment(cls, semantics: ShoppingSemantics | None = None) -> "ShoppingServices":
         """Choose mock tools by default; real adapters are opt-in via configuration."""
-        mode = os.getenv("SHOPPING_TOOL_MODE", "mock").strip().lower()
+        mode = os.getenv("SHOPPING_PLATFORM", os.getenv("SHOPPING_TOOL_MODE", "mock")).strip().lower()
         if mode == "mock":
             return cls.mock(semantics)
         if mode == "real":
@@ -93,14 +96,17 @@ class ShoppingNodes:
     def search_products(self, state: ShoppingState) -> dict:
         requirements = state["requirements"]
         assert requirements is not None
+        logger.info("shopping_tool=search_products arguments=%s", requirements.model_dump(mode="json"))
         raw_products = deduplicate_products(self.services.search.search(requirements))
         qualified = apply_hard_constraints(raw_products, requirements)
+        logger.info("shopping_tool=search_products results=%d qualified=%d", len(raw_products), len(qualified))
         return {"raw_products": raw_products, "qualified_products": qualified, "search_required": False,
                 "search_completed": True, "search_result_status": "results" if qualified else "no_results", "review_status": "pending" if qualified else "not_needed",
                 "ranking_status": "not_needed", "ranked_products": [], "presentation_status": "not_ready"}
 
     def fetch_reviews(self, state: ShoppingState) -> dict:
         try:
+            logger.info("shopping_tool=fetch_reviews product_count=%d", len(state["qualified_products"]))
             reviews = self.services.reviews.fetch(state["qualified_products"])
             return {"reviews": reviews, "review_status": "completed", "review_error": None, "ranking_status": "pending"}
         except Exception as error:  # A review outage is non-fatal by design.
@@ -127,6 +133,7 @@ class ShoppingNodes:
         selected = selected or (state["ranked_products"][0].product if state["ranked_products"] else None)
         if selected is None:
             return {"assistant_message": "Please search for products before adding one to the cart.", "awaiting_user_input": True, "purchase_status": "failed", "user_intent": "none"}
+        logger.info("shopping_tool=add_to_cart product_id=%s", selected.id)
         result = self.services.cart.add(selected)
         return {"cart_result": result, "assistant_message": result.message, "awaiting_user_input": True, "purchase_status": "completed", "user_intent": "none"}
 

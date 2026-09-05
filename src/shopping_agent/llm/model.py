@@ -26,14 +26,14 @@ class GroqModel:
 
     def __init__(
         self,
-        model: str = "llama-3.3-70b-versatile",
+        model: str | None = None,
         *,
         temperature: float = 0.2,
         max_tokens: int = 1_024,
         client: Groq | None = None,
     ) -> None:
         load_dotenv()
-        self.model = model
+        self.model = model or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         self.temperature = temperature
         self.max_tokens = max_tokens
 
