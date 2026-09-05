@@ -36,12 +36,37 @@ class RankedItem(BaseModel):
     explanation: str = ""
 
 
+class PickTier(str, Enum):
+    """The three curated 'highlight' slots shown above the full ranking."""
+
+    BEST_OVERALL = "best_overall"  # highest weighted total across all axes
+    BEST_VALUE = "best_value"      # cheaper than the top pick, still strong
+    BEST_UPGRADE = "best_upgrade"  # pricier / may exceed budget, notably better
+
+
+class CuratedPick(BaseModel):
+    """One highlighted product with a headline reason and a match percentage.
+
+    `match_label` is 'match' for in-budget picks, but 'functional match' for the
+    upgrade tier: an over-budget upgrade is scored on fit only (price excluded),
+    so the percentage stays honest about what it measures.
+    """
+
+    tier: PickTier
+    product_id: str
+    match_pct: int = Field(0, ge=0, le=100)
+    match_label: str = "match"
+    headline: str = ""
+
+
 class Recommendation(BaseModel):
     """Ranked shortlist + reason. `status='empty'` tells the agent to ask the
-    user to relax constraints."""
+    user to relax constraints. `picks` is an optional curated highlight set
+    (best overall / value / upgrade) layered on top of `items`."""
 
     status: str = Field("ok", description="ok | empty")
     items: list[RankedItem] = Field(default_factory=list)
+    picks: list[CuratedPick] = Field(default_factory=list)
     reason: Optional[str] = Field(None, description="Why empty, if empty")
 
 
@@ -119,3 +144,37 @@ class CartResult(BaseModel):
     subtotal: Optional[Decimal] = None
     currency: str = "SGD"
     next_step_instructions: str = ""
+
+
+# --------------------------------------------------------------------------
+# customer feedback (final assembly shown to the shopper)
+# --------------------------------------------------------------------------
+class ProductCard(BaseModel):
+    """One product as presented to the customer: basic info + why it was
+    recommended + how to get it + after-sales + a checkout link."""
+
+    product_id: str
+    title: str
+    platform: str
+    price: str = Field("", description="Formatted total, e.g. 'SGD 139.00'")
+    rating: Optional[float] = None
+    url: str = ""
+    image_url: Optional[str] = Field(None, description="Product image, for the card")
+    # highlight tier, if this card is one of the curated picks
+    tier: Optional[PickTier] = None
+    match_pct: Optional[int] = None
+    match_label: str = "match"
+    # narrative pieces
+    reason: str = Field("", description="Why it's recommended (from ranking)")
+    availability: Optional[str] = Field(None, description="Pickup / delivery line")
+    after_sales: Optional[str] = Field(None, description="Return / warranty line")
+    checkout_url: str = ""
+    checkout_note: str = Field("", description="e.g. 'adds to your Amazon cart'")
+
+
+class CustomerResponse(BaseModel):
+    """The final, customer-facing bundle assembled by the back half."""
+
+    headline: str = ""
+    cards: list[ProductCard] = Field(default_factory=list)
+    footer: str = ""

@@ -13,7 +13,7 @@ schema)`, so a FakeLLM drives this in tests with no network/cost.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -38,7 +38,7 @@ def classify_intent(request: str) -> str:
     return "other"
 
 
-def summarize_policies(product: Product, llm=None) -> PolicySummary:
+def summarize_policies(product: Product, llm: Any = None) -> PolicySummary:
     """Summarise return/warranty/shipping terms from listing text only.
     Missing text -> None fields, never invented terms."""
     has_text = any([product.return_policy_text, product.warranty_text])
@@ -73,7 +73,7 @@ class _Draft(BaseModel):
     text: str
 
 
-def draft_seller_question(product: Product, user_question: str, llm=None) -> str:
+def draft_seller_question(product: Product, user_question: str, llm: Any = None) -> str:
     """Draft a short, polite pre-sales question to the seller."""
     if llm is None:
         q = (user_question or "your question").strip().rstrip("?")
@@ -104,7 +104,7 @@ _GENERIC_CHECKLIST = [
 ]
 
 
-def arrival_checklist(product: Product, llm=None) -> list[str]:
+def arrival_checklist(product: Product, llm: Any = None) -> list[str]:
     """Category-aware 'what to check on arrival' list."""
     if llm is None:
         return list(_GENERIC_CHECKLIST)
@@ -123,7 +123,7 @@ def arrival_checklist(product: Product, llm=None) -> list[str]:
         return list(_GENERIC_CHECKLIST)
 
 
-def handle(product: Product, request: str, llm=None) -> CustomerServiceResult:
+def handle(product: Product, request: str, llm: Any = None) -> CustomerServiceResult:
     """Pure core: route the request to sub-capabilities and assemble a result.
     For an ambiguous ('other') intent, run policy + checklist as a helpful
     default."""

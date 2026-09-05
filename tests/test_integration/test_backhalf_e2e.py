@@ -39,7 +39,7 @@ def loaded_session(candidates):
 
 def test_recommend_products_end_to_end(loaded_session):
     out = recommend_products.func("demo") if hasattr(recommend_products, "func") else recommend_products("demo")
-    assert "Top picks" in out
+    assert "BEST OVERALL" in out and "Full ranking" in out
     rec = get_session("demo").recommendation
     assert rec is not None and rec.status == "ok"
     assert "ebay:EB77EARX" not in [i.product_id for i in rec.items]  # over budget
@@ -73,7 +73,7 @@ def test_customer_service_end_to_end(loaded_session):
 def test_full_flow(loaded_session):
     # recommend -> pickup on the winner -> customer service -> cart
     rec_out = _call(recommend_products, "demo")
-    assert "Top picks" in rec_out
+    assert "BEST OVERALL" in rec_out and "Full ranking" in rec_out
     winner = get_session("demo").recommendation.items[0].product_id
     _call(check_pickup, winner, winner.split(":")[0], "in 5 days")
     _call(customer_service, winner, "what should I check when it arrives?")

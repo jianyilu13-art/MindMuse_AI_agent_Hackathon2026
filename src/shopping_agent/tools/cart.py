@@ -8,7 +8,6 @@ handoff. NEVER claim an order was placed.
 
 from __future__ import annotations
 
-from decimal import Decimal
 
 from shopping_agent.schemas import CartLine, CartResult, CartStatus, Product
 from shopping_agent.tools._registry import tool

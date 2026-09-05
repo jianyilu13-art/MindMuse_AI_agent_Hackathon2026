@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 from shopping_agent.schemas import (
     CartResult,
+    CustomerResponse,
     CustomerServiceResult,
     PickupInfo,
     Product,
@@ -38,6 +39,7 @@ class Session:
     recommendation: Optional[Recommendation] = None
     cs_results: dict[str, CustomerServiceResult] = field(default_factory=dict)
     cart_results: dict[str, CartResult] = field(default_factory=dict)
+    customer_response: Optional[CustomerResponse] = None
     llm: Any = None  # FakeLLM in tests; real provider (Groq) later. None -> deterministic fallbacks.
 
     def add_candidates(self, products: list[Product]) -> None:

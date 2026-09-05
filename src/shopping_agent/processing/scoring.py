@@ -6,6 +6,8 @@ fixed candidates + fixed weights -> expected ranked order).
 
 from __future__ import annotations
 
+from typing import Any
+
 
 def minmax_normalize(values: list[float], *, higher_is_better: bool) -> list[float]:
     """Map values to [0, 1] within the set.
@@ -29,9 +31,9 @@ def minmax_normalize(values: list[float], *, higher_is_better: bool) -> list[flo
 
 
 def preference_score(
-    product_attributes: dict,
+    product_attributes: dict[str, Any],
     prefs: list[str],
-    aspect_sentiment: dict,
+    aspect_sentiment: dict[str, float],
 ) -> float:
     """0-1 match between the user's stated preferences and the product's
     attributes + review aspect sentiment.

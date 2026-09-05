@@ -14,7 +14,7 @@ import math
 import re
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from shopping_agent.schemas import PickupInfo, PickupMethod, Product
 from shopping_agent.tools._registry import tool
@@ -71,7 +71,7 @@ def parse_delivery_days(delivery_estimate: Optional[str]) -> Optional[int]:
 # --------------------------------------------------------------------------
 # local inventory
 # --------------------------------------------------------------------------
-def _load_inventory(path: Optional[Path] = None) -> dict:
+def _load_inventory(path: Optional[Path] = None) -> dict[str, Any]:
     path = path or DEFAULT_INVENTORY_PATH
     try:
         return json.loads(Path(path).read_text())
@@ -79,7 +79,9 @@ def _load_inventory(path: Optional[Path] = None) -> dict:
         return {"stores": [], "inventory": []}
 
 
-def _store_pickup_candidate(product_id: str, inventory: dict, *, today: date) -> Optional[dict]:
+def _store_pickup_candidate(
+    product_id: str, inventory: dict[str, Any], *, today: date
+) -> Optional[dict[str, Any]]:
     """Return the soonest in-stock store row for a product, or None."""
     rows = [
         r
@@ -107,7 +109,7 @@ def check_pickup_availability(
     location: str = "Singapore",
     *,
     today: Optional[date] = None,
-    inventory: Optional[dict] = None,
+    inventory: Optional[dict[str, Any]] = None,
 ) -> PickupInfo:
     """Pure core. Priority order:
       1. local inventory hit that can be ready by target_date -> store_pickup
@@ -175,6 +177,7 @@ def check_pickup_availability(
             platform=getattr(product, "platform", "unknown"),
             method=PickupMethod.SHIP,
             available_by=None,
+            location=None,
             confidence=0.1,
             source="fallback",
             note=f"pickup check failed: {exc}",
