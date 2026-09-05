@@ -1,0 +1,72 @@
+{
+  "shopping_results": [
+    {
+      "position": 1,
+      "product_id": "amazon-peg41",
+      "title": "Nike Air Zoom Pegasus 41 Running Shoes, cushioned lightweight breathable",
+      "source": "Amazon.sg",
+      "link": "https://www.amazon.sg/dp/B0PEG41",
+      "asin": "B0PEG41",
+      "thumbnail": "https://img.example/pegasus41.jpg",
+      "extracted_price": 139.00,
+      "price": "S$139.00",
+      "rating": 4.5,
+      "reviews": 820,
+      "delivery": "Free delivery",
+      "extensions": ["Free returns", "30-day return"]
+    },
+    {
+      "position": 2,
+      "product_id": "lazada-dur10",
+      "title": "Adidas Duramo SL Running Shoes, lightweight",
+      "source": "Lazada",
+      "link": "https://www.lazada.sg/products/dur10.html",
+      "thumbnail": "https://img.example/duramo.jpg",
+      "extracted_price": 89.00,
+      "price": "S$89.00",
+      "rating": 4.2,
+      "reviews": 210,
+      "delivery": "+S$3.90 delivery"
+    },
+    {
+      "position": 3,
+      "product_id": "amazon-gel22",
+      "title": "ASICS Gel-Cumulus 26 Running Shoes, cushioned lightweight",
+      "source": "Amazon.sg",
+      "link": "https://www.amazon.sg/dp/B0GEL26",
+      "asin": "B0GEL26",
+      "thumbnail": "https://img.example/gelcumulus.jpg",
+      "extracted_price": 158.00,
+      "price": "S$158.00",
+      "rating": 4.8,
+      "reviews": 1340,
+      "delivery": "Free delivery"
+    },
+    {
+      "position": 4,
+      "product_id": "shopee-runx",
+      "title": "RunX Trainer Basic, breathable mesh",
+      "source": "Shopee",
+      "link": "https://shopee.sg/product/runx",
+      "thumbnail": "https://img.example/runx.jpg",
+      "extracted_price": 45.50,
+      "price": "S$45.50",
+      "rating": 3.9,
+      "reviews": 60,
+      "delivery": "+S$4.50 delivery"
+    },
+    {
+      "position": 5,
+      "product_id": "courts-newb",
+      "title": "New Balance 520v8 Running Shoes, cushioned",
+      "source": "Courts",
+      "link": "https://www.courts.com.sg/nb-520v8",
+      "thumbnail": "https://img.example/nb520.jpg",
+      "extracted_price": 119.00,
+      "price": "S$119.00",
+      "rating": 4.4,
+      "reviews": 430,
+      "delivery": "Free delivery"
+    }
+  ]
+}

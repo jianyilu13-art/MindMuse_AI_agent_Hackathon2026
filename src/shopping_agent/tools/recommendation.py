@@ -44,9 +44,13 @@ def _passes_objective(
     reqs: UserRequirements,
     pickup: Optional[PickupInfo],
 ) -> bool:
-    """Deterministic hard filter: budget and deadline / pickup requirement."""
+    """Deterministic hard filter: budget, deadline, pickup, and must-haves."""
     if reqs.budget is not None and product.total_price() > reqs.budget:
         return False
+    if reqs.must_have:
+        haystack = f"{product.title} {' '.join(str(v) for v in product.attributes.values())}".lower()
+        if any(feature.lower().strip() not in haystack for feature in reqs.must_have):
+            return False
     if reqs.deadline is not None:
         if pickup is not None:
             if not pickup.meets_deadline(reqs.deadline):
@@ -106,7 +110,10 @@ def _score_products(
     speeds = [_delivery_days(p, pickup_infos.get(p.id), today) for p in products]
     prefs = [
         preference_score(
-            p.attributes,
+            # include title/description so preferences match listing text too,
+            # not only structured attributes (search results carry features in
+            # the title).
+            {**p.attributes, "_title": p.title, "_desc": p.description or ""},
             reqs.preferences,
             review_summaries[p.id].aspect_sentiment if p.id in review_summaries else {},
         )

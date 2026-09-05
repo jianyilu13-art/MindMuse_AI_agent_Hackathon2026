@@ -29,7 +29,7 @@ def build_checkout_url(product: Product, quantity: int = 1) -> str:
     """Construct a platform-specific add-to-cart / product deep link.
     Unknown / handoff-only platform -> the product's own URL."""
     platform = (product.platform or "").lower()
-    if platform == "amazon":
+    if "amazon" in platform:  # 'amazon', 'amazon.sg', 'Amazon' (Google Shopping seller)
         asin = _amazon_asin(product)
         if asin:
             # Real login-free add-to-cart endpoint.
@@ -57,13 +57,13 @@ def prepare_cart(product: Product, quantity: int = 1) -> CartResult:
         unit_price=unit,
     )
 
-    if platform == "amazon" and "cart/add" in url:
+    if "amazon" in platform and "cart/add" in url:
         status = CartStatus.PREPARED
         instructions = (
             "Open this link to review the item in your Amazon cart and complete "
             "checkout yourself. Nothing has been ordered."
         )
-    elif platform in _HANDOFF_ONLY:
+    elif any(h in platform for h in _HANDOFF_ONLY):
         status = CartStatus.PREPARED
         instructions = (
             f"Open this {product.platform} product page to add it to your cart "

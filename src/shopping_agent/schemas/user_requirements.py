@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -36,9 +36,17 @@ class Weights(BaseModel):
 
 
 class UserRequirements(BaseModel):
-    """Structured shopping request."""
+    """Structured shopping request — the unified contract (superset of what all
+    four teammates' code needed). The front half fills what it can from the
+    user's message; every field has a safe default so partial input still works.
+    """
 
+    # --- core ---
     product_query: str = Field(..., description="What the user wants to buy")
+    category: Optional[str] = Field(None, description="e.g. 'running_shoes'")
+    size: Optional[str] = Field(None, description="Clothing/shoe size, if relevant")
+
+    # --- budget & timing ---
     budget: Optional[Decimal] = Field(None, description="Max acceptable total price")
     currency: str = "SGD"
     deadline: Optional[date] = Field(None, description="Must arrive / be ready by")
@@ -46,11 +54,26 @@ class UserRequirements(BaseModel):
     pickup_required: bool = Field(
         False, description="User needs in-store pickup / collect, not just delivery"
     )
-    preferences: list[str] = Field(
-        default_factory=list, description="Free-text prefs, e.g. ['USB-C', 'long battery']"
+
+    # --- filters & preferences ---
+    must_have: list[str] = Field(
+        default_factory=list, description="Hard requirements a product MUST satisfy"
     )
+    preferences: list[str] = Field(
+        default_factory=list, description="Soft prefs for scoring, e.g. ['USB-C', 'long battery']"
+    )
+    preferred_brands: list[str] = Field(default_factory=list)
+    preferred_platforms: list[str] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(
+        default_factory=dict, description="Dynamic structured attributes (front-half parsed)"
+    )
+    no_preference_fields: list[str] = Field(
+        default_factory=list, description="Attribute keys the user explicitly doesn't care about"
+    )
+
+    # --- ranking & output ---
     weights: Weights = Field(default_factory=Weights)
-    max_results: int = 4
+    max_results: int = 5
 
     @model_validator(mode="after")
     def _check(self) -> "UserRequirements":

@@ -56,8 +56,8 @@ def _availability_line(
         except Exception:
             info = None
 
-    if info is not None:
-        when = info.available_by.isoformat() if info.available_by else "an unknown date"
+    if info is not None and info.available_by is not None:
+        when = info.available_by.isoformat()
         if info.method == PickupMethod.STORE_PICKUP:
             return f"In-store pickup by {when}" + (f" at {info.location}" if info.location else "")
         if info.method == PickupMethod.LOCKER:
@@ -69,7 +69,15 @@ def _availability_line(
     days = parse_delivery_days(product.delivery_estimate)
     if days is not None:
         return f"Ships in about {days} day{'s' if days != 1 else ''}"
-    return None
+
+    # No concrete ETA (common with Google Shopping, which reports cost not time)
+    # -> surface what we do know: free vs paid delivery.
+    note = product.attributes.get("delivery_note")
+    if note:
+        return str(note)
+    if product.shipping_cost == 0:
+        return "Free delivery"
+    return f"Delivery +{product.currency} {product.shipping_cost}"
 
 
 def _after_sales_line(product: Product, llm=None) -> Optional[str]:
