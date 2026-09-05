@@ -6,12 +6,12 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2",
     "python-dateutil>=2.8",
+    "langgraph>=0.2",
 ]
 
 [project.optional-dependencies]
-agent = [
-    "langchain-core>=0.2",
-    "langgraph>=0.2",
+llm = [
+    "groq>=0.11",
 ]
 live = [
     "requests>=2.28",

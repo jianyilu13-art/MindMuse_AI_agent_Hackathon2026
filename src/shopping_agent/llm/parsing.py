@@ -32,8 +32,11 @@ class FakeLLM:
 
 
 def structured_output(llm: Any, tag: str, prompt: str, schema: Type[T]) -> T:
-    """Call `llm` and coerce its output into `schema`. Real LLM path is a stub;
-    a FakeLLM (or anything exposing `.structured`) works today for tests."""
+    """Call `llm` and coerce its output into `schema`.
+
+    Any provider exposing `.structured(tag, prompt, schema)` works — `FakeLLM`
+    in tests, `GroqLLM` (see `llm.model`) in production.
+    """
     if hasattr(llm, "structured"):
         return llm.structured(tag, prompt, schema)
-    raise NotImplementedError("structured_output: real LLM path not implemented yet")
+    raise TypeError(f"llm {type(llm).__name__} has no .structured(tag, prompt, schema)")

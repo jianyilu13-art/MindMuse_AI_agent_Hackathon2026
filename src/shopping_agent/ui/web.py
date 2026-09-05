@@ -19,11 +19,20 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from shopping_agent.agent import initial_state, run_turn
+from shopping_agent.llm.model import get_llm
 from shopping_agent.schemas import PickTier
-from shopping_agent.ui.conversation import ChatSession, handle_message
 
 PORT = 8000
-_SESSIONS: dict[str, ChatSession] = {}
+_SESSIONS: dict[str, dict] = {}          # sid -> AgentState
+_GREETING = "Hi! I'm Muse, your shopping assistant. What are you looking to buy today?"
+
+
+def _new_session() -> dict:
+    """A fresh agent conversation (LLM if a key is configured, else rules)."""
+    state = initial_state("ui", llm=get_llm())
+    state["history"] = [{"role": "assistant", "content": _GREETING}]
+    return state
 
 _TIER = {
     PickTier.BEST_OVERALL: ("Best Overall", "🥇", "overall"),
@@ -145,8 +154,8 @@ def _card(card) -> str:
             "</div></div>")
 
 
-def _results_html(session: ChatSession) -> str:
-    resp = session.response
+def _results_html(session: dict) -> str:
+    resp = session.get("response")
     if not resp or not resp.cards:
         return ""
     cards = "".join(_card(c) for c in resp.cards)
@@ -156,9 +165,9 @@ def _results_html(session: ChatSession) -> str:
             f"<div class=footer>{html.escape(resp.footer)}</div>")
 
 
-def _messages_html(session: ChatSession) -> str:
+def _messages_html(session: dict) -> str:
     rows = []
-    for m in session.messages:
+    for m in session.get("history", []):
         role = "user" if m["role"] == "user" else "assistant"
         rows.append(f"<div class='message {role}'><div class=bubble>{html.escape(m['content'])}</div></div>")
     return "".join(rows)
@@ -174,8 +183,8 @@ def _status_box() -> str:
             "Offline demo · seeded search · no order is ever placed</div>")
 
 
-def _page(session: ChatSession) -> str:
-    placeholder = "Type a product to start again…" if session.done else "Type your reply…"
+def _page(session: dict) -> str:
+    placeholder = "Type a product to start again…" if session.get("finished") else "Type your reply…"
     return (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -239,23 +248,24 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers(); return
         sid, is_new = self._sid()
         if parse_qs(parsed.query).get("new"):
-            _SESSIONS[sid] = ChatSession()  # reset conversation
-        session = _SESSIONS.setdefault(sid, ChatSession())
+            _SESSIONS[sid] = _new_session()  # reset conversation
+        session = _SESSIONS.setdefault(sid, _new_session())
         self._send(_page(session).encode("utf-8"), sid, is_new)
 
     def do_POST(self):  # noqa: N802
         sid, is_new = self._sid()
-        session = _SESSIONS.setdefault(sid, ChatSession())
+        session = _SESSIONS.setdefault(sid, _new_session())
         length = int(self.headers.get("Content-Length", 0) or 0)
         data = parse_qs(self.rfile.read(length).decode("utf-8")) if length else {}
         msg = (data.get("msg", [""])[0] or "").strip()
         if msg:
-            if session.done:  # finished a chat -> any new message starts a fresh one
-                session = _SESSIONS[sid] = ChatSession()
+            if session.get("finished"):  # finished -> any new message restarts
+                session = _SESSIONS[sid] = _new_session()
             try:
-                handle_message(session, msg)
+                _SESSIONS[sid] = run_turn(session, msg)
             except Exception as exc:  # keep the chat alive
-                session.messages.append({"role": "assistant", "content": f"Sorry, something went wrong: {exc}"})
+                session.setdefault("history", []).append(
+                    {"role": "assistant", "content": f"Sorry, something went wrong: {exc}"})
         # Post/Redirect/Get so a refresh doesn't resend the message
         self._send(b"", sid, is_new, status=303, location="/")
 
