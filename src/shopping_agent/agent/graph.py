@@ -20,6 +20,7 @@ def build_shopping_graph(services: ShoppingServices | None = None):
         "rank_products": nodes.rank_products,
         "display_results": nodes.display_results,
         "add_to_cart": nodes.add_to_cart,
+        "compare_products": nodes.compare_products,
         "terminate": nodes.terminate,
     }
     for name, node in actions.items():

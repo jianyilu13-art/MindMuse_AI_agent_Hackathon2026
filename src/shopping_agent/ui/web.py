@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import os
 import threading
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from time import monotonic
 import uuid
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -18,11 +21,14 @@ from typing import Any
 
 from shopping_agent.agent import (
     ShoppingState,
+    ShoppingServices,
     build_shopping_graph,
     initial_state,
 )
 
 from .display import state_to_view
+
+logger = logging.getLogger(__name__)
 
 
 EXIT_COMMANDS = {"exit", "quit"}
@@ -49,9 +55,11 @@ class ShoppingApplication:
     """In-memory session manager around the existing shopping graph."""
 
     def __init__(self) -> None:
-        self.graph = build_shopping_graph()
+        self.services = ShoppingServices.from_environment()
+        self.graph = build_shopping_graph(self.services)
         self.sessions: dict[str, ShoppingSession] = {}
         self.lock = threading.Lock()
+        self.community_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="shopping-community")
 
     def get_session(self, session_id: str | None) -> tuple[str, ShoppingSession]:
         """Return an existing session or create a new one."""
@@ -108,10 +116,13 @@ class ShoppingApplication:
             )
 
             try:
+                started = monotonic()
                 session.state = self.graph.invoke(
                     session.state,
                     {"recursion_limit": 20},
                 )
+                logger.info("shopping_timing operation=graph_invoke elapsed_ms=%.1f", (monotonic() - started) * 1000)
+                self._fetch_community_in_background(session)
             except Exception as error:
                 session.state["assistant_message"] = (
                     "I could not complete that step. Please try again."
@@ -127,6 +138,31 @@ class ShoppingApplication:
 
         return self.view(session)
 
+    def _fetch_community_in_background(self, session: ShoppingSession) -> None:
+        """Enrich recommendations asynchronously so forum search never delays them."""
+        if self.services.community is None or session.state["community_status"] != "not_needed":
+            return
+        products = list(session.state["qualified_products"])
+        if not products:
+            return
+        product_ids = {product.id for product in products}
+        session.state["community_status"] = "pending"
+        started = monotonic()
+
+        def collect() -> None:
+            try:
+                feedback, status, error = self.services.community.fetch(products), "completed", None
+            except Exception as exc:  # Community evidence is optional.
+                feedback, status, error = {}, "failed", str(exc)
+            with self.lock:
+                if {product.id for product in session.state["qualified_products"]} == product_ids:
+                    session.state.update(community_feedback=feedback, community_status=status)
+                    if error:
+                        session.state["review_error"] = error
+            logger.info("shopping_timing operation=forum_background elapsed_ms=%.1f", (monotonic() - started) * 1000)
+
+        self.community_executor.submit(collect)
+
     def view(self, session: ShoppingSession) -> dict[str, Any]:
         """Return the state fields needed by the browser."""
 
@@ -135,9 +171,10 @@ class ShoppingApplication:
             {
                 "messages": session.messages,
                 "groq_configured": bool(os.getenv("GROQ_API_KEY")),
+                "searchapi_configured": bool(os.getenv("SEARCHAPI_API_KEY")),
                 "model": os.getenv(
                     "GROQ_MODEL",
-                    "llama-3.3-70b-versatile",
+                    "not configured",
                 ),
             }
         )
@@ -518,19 +555,17 @@ HTML_PAGE = r"""<!doctype html>
     }
 
     function renderGuidance(data) {
-      const items = data.suggested_attributes || [];
-      if (!items.length && !data.product_category) {
+      const requirements = data.requirements;
+      const missing = data.missing_required_information || [];
+      if (!requirements && !missing.length) {
         guidanceStateEl.textContent = 'Waiting';
         guidanceEl.innerHTML = 'Start with the product you want to buy. Muse will recommend the details that matter.';
         return;
       }
-      const required = items.filter(item => item.required);
-      const optional = items.filter(item => !item.required);
       guidanceStateEl.textContent = data.awaiting_user_input ? 'Needs input' : 'Ready';
-      guidanceEl.innerHTML = `${data.product_category ? `<div class="category-chip">${escapeHtml(data.product_category.replaceAll('_', ' '))}</div>` : ''}
-        ${required.length ? `<div class="attribute-group"><div class="attribute-label">Required</div><div class="attribute-list">${required.map(attributeHtml).join('')}</div></div>` : ''}
-        ${optional.length ? `<div class="attribute-group"><div class="attribute-label">Optional</div><div class="attribute-list">${optional.map(attributeHtml).join('')}</div></div>` : ''}
-        <div class="hint">Required details unlock a useful search. Optional details help Muse narrow the style, fit, or trade-offs.</div>`;
+      const facts = requirements ? Object.entries(requirements).filter(([, value]) => value != null && value !== '' && (!Array.isArray(value) || value.length)).map(([name, value]) => `<div class="attribute provided">✓ ${escapeHtml(name.replaceAll('_', ' '))}: ${escapeHtml(Array.isArray(value) ? value.join(', ') : value)}</div>`).join('') : '';
+      const needed = missing.length ? `<div class="attribute-group"><div class="attribute-label">Still needed</div><div class="attribute-list">${missing.map(value => `<div class="attribute required">${escapeHtml(value)}</div>`).join('')}</div></div>` : '';
+      guidanceEl.innerHTML = `<div class="attribute-group"><div class="attribute-label">Current requirements</div><div class="attribute-list">${facts || '<div class="empty-insight">Waiting for product details.</div>'}</div></div>${needed}`;
     }
 
     function productIcon(category) {
@@ -552,26 +587,24 @@ HTML_PAGE = r"""<!doctype html>
       productGridEl.innerHTML = products.map(product => {
         const rating = product.rating == null ? 'No rating' : `★ ${Number(product.rating).toFixed(1)} <span>(${product.review_count || 0})</span>`;
         const badges = Object.entries(product.attributes || {}).filter(([key]) => !['query', 'max_price', 'arrival_by', 'must_have'].includes(key)).slice(0, 3).map(([key, value]) => `<span class="product-badge">${escapeHtml(String(value))}</span>`).join('');
-        const arrival = product.arrival_date ? `Arrives ${escapeHtml(product.arrival_date)}` : 'Delivery date unavailable';
-        return `<article class="product-card"><div class="product-art"><div class="product-icon">${productIcon(data.product_category)}</div><div class="platform">${escapeHtml(product.platform)}</div></div><div class="product-info"><h3>${escapeHtml(product.title)}</h3><div class="rating">${rating}</div><div class="product-badges">${badges}<span class="product-badge">${arrival}</span></div><div class="price-row"><div class="price">${escapeHtml(product.currency)} ${Number(product.price).toFixed(2)}</div><button class="cart-button" data-buy="${escapeHtml(product.id)}">Add to cart</button></div></div></article>`;
+        const delivery = product.shipping_info || (product.arrival_date ? `Arrives ${product.arrival_date}` : 'Delivery unavailable');
+        const feedback = data.community_feedback?.[product.id]?.available ? 'Community feedback found' : 'No community feedback';
+        const image = product.image_url ? `<img src="${escapeHtml(product.image_url)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain">` : `<div class="product-icon">✦</div>`;
+        const reasons = (product.reasons || []).slice(0, 2).map(reason => `<span class="product-badge">${escapeHtml(reason)}</span>`).join('');
+        const score = product.score == null ? '' : `<span class="product-badge">Score ${Number(product.score).toFixed(1)}</span>`;
+        return `<article class="product-card"><div class="product-art">${image}<div class="platform">${escapeHtml(product.seller || product.platform)}</div></div><div class="product-info"><h3>${escapeHtml(product.title)}</h3><div class="rating">${rating}</div><div class="product-badges">${badges}${score}${reasons}<span class="product-badge">${escapeHtml(delivery)}</span><span class="product-badge">${feedback}</span></div><div class="price-row"><div class="price">${escapeHtml(product.currency)} ${Number(product.price).toFixed(2)}</div><a class="cart-button" href="${escapeHtml(product.url)}" target="_blank" rel="noopener">Open product</a></div></div></article>`;
       }).join('');
       productGridEl.querySelectorAll('[data-buy]').forEach(button => button.addEventListener('click', () => sendMessage(`buy ${button.dataset.buy}`)));
-    }
-
-    function renderPayload(data) {
-      const payload = data.search_tool_input;
-      document.getElementById('payload-container').innerHTML = payload ? `<details class="payload"><summary>View search tool payload</summary><pre>${escapeHtml(JSON.stringify({ShoppingToolInput: payload}, null, 2))}</pre></details>` : '';
     }
 
     function render(data) {
       renderMessages(data.messages || []);
       renderGuidance(data);
       renderProducts(data);
-      renderPayload(data);
       const dot = document.getElementById('status-dot');
       const status = document.getElementById('status-text');
       dot.classList.toggle('demo', !data.groq_configured);
-      status.textContent = data.groq_configured ? `Groq connected · ${data.model}` : 'Demo mode · add GROQ_API_KEY for Groq';
+      status.textContent = `${data.groq_configured ? `Groq connected · ${data.model}` : 'Groq key missing'} · ${data.searchapi_configured ? 'SearchAPI connected' : 'SearchAPI key missing'}`;
       document.getElementById('model-pill').textContent = data.groq_configured ? data.model : 'Local demo semantics';
       if (data.last_error) {
         guidanceEl.insertAdjacentHTML('beforeend', `<div class="error-note">The last operation needs attention. You can retry the message.</div>`);
@@ -589,6 +622,7 @@ HTML_PAGE = r"""<!doctype html>
       const value = String(message || '').trim();
       if (!value || sendButtonEl.disabled) return;
       sendButtonEl.disabled = true;
+      sendButtonEl.textContent = '…';
       inputEl.value = '';
       try {
         render(await request('/api/chat', {method: 'POST', body: JSON.stringify({message: value})}));
@@ -596,6 +630,7 @@ HTML_PAGE = r"""<!doctype html>
         guidanceEl.innerHTML = `<div class="error-note">${escapeHtml(error.message)}</div>`;
       } finally {
         sendButtonEl.disabled = false;
+        sendButtonEl.textContent = '↑';
         inputEl.focus();
       }
     }

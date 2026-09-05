@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-from shopping_agent.schemas import Product, RankedProduct, ReviewSummary, UserRequirements
+from shopping_agent.schemas import CommunityFeedbackSummary, Product, RankedProduct, ReviewSummary, UserRequirements
 from shopping_agent.tools.add_to_cart import CartResult
 
 
-UserIntent = Literal["search", "change_requirements", "more_results", "purchase", "finish", "clarify", "none"]
+UserIntent = Literal["search", "change_requirements", "more_results", "purchase", "compare", "finish", "clarify", "none"]
 InputStatus = Literal["uninterpreted", "interpreted"]
 RequirementStatus = Literal["unknown", "incomplete", "ready"]
 SearchResultStatus = Literal["not_searched", "results", "no_results"]
 ReviewStatus = Literal["not_needed", "pending", "completed", "failed"]
+CommunityStatus = Literal["not_needed", "pending", "completed", "failed"]
 RankingStatus = Literal["not_needed", "pending", "completed"]
 PresentationStatus = Literal["not_ready", "ready", "displayed", "exhausted"]
 PurchaseStatus = Literal["none", "requested", "completed", "failed"]
@@ -41,16 +42,21 @@ class ShoppingState(TypedDict):
     raw_products: list[Product]
     qualified_products: list[Product]
     reviews: dict[str, ReviewSummary]
+    community_feedback: dict[str, CommunityFeedbackSummary]
+    community_status: CommunityStatus
     review_status: ReviewStatus
     review_error: str | None
     ranking_status: RankingStatus
     ranked_products: list[RankedProduct]
+    displayed_products: list[Product]
+    conversation_turns: list[dict[str, str]]
 
     # Presentation/action observations
     display_offset: int
     page_size: int
     presentation_status: PresentationStatus
     selected_product_id: str | None
+    comparison_product_ids: list[str]
     purchase_status: PurchaseStatus
     cart_result: CartResult | None
     assistant_message: str | None
@@ -77,14 +83,19 @@ def initial_state(message: str = "") -> ShoppingState:
         "raw_products": [],
         "qualified_products": [],
         "reviews": {},
+        "community_feedback": {},
+        "community_status": "not_needed",
         "review_status": "not_needed",
         "review_error": None,
         "ranking_status": "not_needed",
         "ranked_products": [],
+        "displayed_products": [],
+        "conversation_turns": [],
         "display_offset": 0,
         "page_size": 3,
         "presentation_status": "not_ready",
         "selected_product_id": None,
+        "comparison_product_ids": [],
         "purchase_status": "none",
         "cart_result": None,
         "assistant_message": None,

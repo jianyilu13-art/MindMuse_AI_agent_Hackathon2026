@@ -12,6 +12,15 @@ from tests.mocks.mock_search import MockRunningShoeSearch
 from tests.mocks.mock_semantics import ScriptedShoppingSemantics
 
 
+class CountingRunningShoeSearch(MockRunningShoeSearch):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def search(self, requirements):
+        self.calls += 1
+        return super().search(requirements)
+
+
 def services() -> ShoppingServices:
     return ShoppingServices(MockRunningShoeSearch(), MockRunningShoeReviews(), MockCart(), ScriptedShoppingSemantics())
 
@@ -42,6 +51,24 @@ def test_missing_requirements_then_search_reviews_rank_and_display() -> None:
     state = send(graph, state, "Show me more.")
     assert state["search_result_status"] == "results"
     assert state["presentation_status"] == "displayed"
+
+
+def test_first_footwear_turn_clarifies_without_search_then_searches_after_size() -> None:
+    search = CountingRunningShoeSearch()
+    service_set = ShoppingServices(search, MockRunningShoeReviews(), MockCart(), ScriptedShoppingSemantics())
+    graph = build_shopping_graph(service_set)
+    state = send(graph, initial_state(), "I want running shoes.")
+    assert state["requirement_status"] == "incomplete"
+    assert state["search_required"] is False
+    assert state["requirements"].query == "running shoes"
+    assert search.calls == 0
+
+    state = send(graph, state, "Size 42, any brand, under $100.")
+    assert state["requirements"].size == "42"
+    assert state["requirements"].max_price == 100
+    assert search.calls == 1
+    state = send(graph, state, "Show me more.")
+    assert search.calls == 1
 
 
 def test_no_results_requests_change_then_searches_again() -> None:

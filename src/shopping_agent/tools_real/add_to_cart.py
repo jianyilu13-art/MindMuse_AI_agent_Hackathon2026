@@ -25,3 +25,10 @@ class RealAddToCartTool:
 
     def add(self, product: Product) -> CartResult:
         return add_to_cart(product, platform_resolver=self.platform_resolver)
+
+
+class OpenProductLinkTool:
+    """Safe action for SearchAPI results; it never performs a checkout."""
+    def add(self, product: Product) -> CartResult:
+        return CartResult(success=True, cart_reference=product.url,
+                          message=f"Open {product.url} to view {product.title}. Any purchase or checkout happens outside this assistant on the linked marketplace or seller website.")

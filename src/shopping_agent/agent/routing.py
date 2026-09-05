@@ -6,7 +6,7 @@ from .state import ShoppingState
 
 NextAction = Literal[
     "interpret_user_input", "extract_requirements", "ask_clarification", "search_products",
-    "fetch_reviews", "rank_products", "display_results", "add_to_cart", "terminate", "end",
+    "fetch_reviews", "rank_products", "display_results", "add_to_cart", "compare_products", "terminate", "end",
 ]
 
 
@@ -22,13 +22,15 @@ def next_action(state: ShoppingState) -> NextAction:
         return "terminate"
     if state["purchase_status"] == "requested":
         return "add_to_cart"
+    if state["user_intent"] == "compare":
+        return "compare_products"
     if state["pending_requirement_text"] is not None:
         return "extract_requirements"
     if state["requirement_status"] != "ready":
         return "ask_clarification"
     if state["search_required"]:
         return "search_products"
-    if state["search_result_status"] == "no_results":
+    if state["search_result_status"] == "no_results" and state["presentation_status"] == "not_ready":
         return "ask_clarification"
     if state["review_status"] == "pending":
         return "fetch_reviews"

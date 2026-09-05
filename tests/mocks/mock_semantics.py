@@ -9,7 +9,7 @@ from shopping_agent.schemas import Product, RequirementAssessment, UserRequireme
 
 
 class ScriptedShoppingSemantics:
-    def interpret_input(self, message: str, requirements: UserRequirements | None, products: list[Product]) -> InputInterpretation:
+    def interpret_input(self, message: str, requirements: UserRequirements | None, products: list[Product], conversation_context: str = "") -> InputInterpretation:
         decisions = {
             "I want running shoes.": ("search", True, None),
             "Size 42, any brand, under $100.": ("change_requirements", True, None),

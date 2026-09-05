@@ -21,6 +21,10 @@ def rank_products(
             score += (product.rating or 0) * 5
         if "reviews" in priorities:
             score += min(product.review_count, 1000) / 100
+        preferred_platforms = {platform.lower() for platform in requirements.preferred_platforms}
+        if product.platform.lower() in preferred_platforms:
+            score += 5
+            reasons.append("Matches your preferred seller/platform")
         if ("delivery" in priorities or "arrival" in priorities) and product.arrival_date and requirements.arrival_by:
             score += max((requirements.arrival_by - product.arrival_date).days, 0)
         summary = reviews.get(product.id)

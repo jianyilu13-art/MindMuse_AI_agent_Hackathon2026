@@ -11,8 +11,10 @@ class UserRequirements(BaseModel):
     """Facts and preferences stated by the shopper (not inferred defaults)."""
     query: str | None = None
     size: str | None = None
+    min_price: float | None = Field(default=None, gt=0)
     max_price: float | None = Field(default=None, gt=0)
     arrival_by: date | None = None
+    attributes: dict[str, str] = Field(default_factory=dict)
     must_have: list[str] = Field(default_factory=list)
     preferred_brands: list[str] = Field(default_factory=list)
     preferred_platforms: list[str] = Field(default_factory=list)

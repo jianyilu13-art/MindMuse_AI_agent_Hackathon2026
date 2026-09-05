@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 .vscode/
+
+.env
+.env.*
+!.env.example
