@@ -18,6 +18,7 @@ def build_shopping_graph(services: ShoppingServices | None = None):
         "search_products": nodes.search_products,
         "fetch_reviews": nodes.fetch_reviews,
         "rank_products": nodes.rank_products,
+        "select_best_picks": nodes.select_best_picks,
         "display_results": nodes.display_results,
         "add_to_cart": nodes.add_to_cart,
         "compare_products": nodes.compare_products,

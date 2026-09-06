@@ -124,6 +124,7 @@ class ShoppingApplication:
                 logger.info("shopping_timing operation=graph_invoke elapsed_ms=%.1f", (monotonic() - started) * 1000)
                 self._fetch_community_in_background(session)
             except Exception as error:
+                logger.exception("shopping_graph_failed")
                 session.state["assistant_message"] = (
                     "I could not complete that step. Please try again."
                 )
@@ -445,6 +446,23 @@ HTML_PAGE = r"""<!doctype html>
     .results-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
     .results-header h2 { margin: 0; font-size: 16px; }
     .results-header span { color: var(--muted); font-size: 11px; }
+    .best-picks { margin-bottom: 18px; }
+    .best-pick-tabs { display: flex; gap: 7px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .best-pick-tab { border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fff; padding: 7px 11px; font-size: 11px; font-weight: 700; }
+    .best-pick-tab.active { border-color: #c9bcff; color: var(--purple-dark); background: var(--lavender); }
+    .best-pick-tab:disabled { cursor: default; opacity: .55; }
+    .best-pick-panel { margin-top: 12px; border: 1px solid #ddd7ff; border-radius: 16px; overflow: hidden; background: linear-gradient(145deg, #faf9ff, #fff8f2); }
+    .best-pick-card { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 15px 16px; }
+    .best-pick-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; color: var(--purple-dark); font-size: 11px; font-weight: 800; }
+    .best-pick-tier { text-transform: uppercase; letter-spacing: .06em; }
+    .best-pick-content { min-width: 0; }
+    .best-pick-content h3 { margin: 0 0 6px; font-size: 13px; line-height: 1.35; }
+    .best-pick-price { font-size: 16px; font-weight: 800; margin-bottom: 7px; }
+    .best-pick-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 9px; }
+    .best-pick-headline { color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .best-pick-reasons { color: #625b7d; font-size: 10px; line-height: 1.4; margin: 9px 0 11px; }
+    .best-pick-unavailable { color: var(--muted); font-size: 11px; line-height: 1.45; padding: 0 2px 4px; }
+    .best-pick-link { display: inline-block; border-radius: 9px; background: var(--purple); color: #fff; padding: 8px 10px; font-size: 10px; font-weight: 700; text-decoration: none; }
     .product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
     .product-card { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #fff; }
     .product-art { height: 112px; padding: 12px; display: flex; justify-content: space-between; align-items: start; background: linear-gradient(135deg, #e9e4ff, #fff0e7); color: var(--purple-dark); }
@@ -476,6 +494,7 @@ HTML_PAGE = r"""<!doctype html>
       .hero-badge { margin-top: 14px; }
       .side-stack { grid-template-columns: 1fr; }
       .product-grid { grid-template-columns: 1fr; }
+      .best-pick-card { grid-template-columns: 1fr; }
       .model-pill { display: none; }
     }
   </style>
@@ -519,7 +538,7 @@ HTML_PAGE = r"""<!doctype html>
           </aside>
         </div>
 
-        <section id="results-card" class="results-card"><div class="results-header"><h2>Your curated matches</h2><span id="result-count"></span></div><div id="product-grid" class="product-grid"></div></section>
+        <section id="results-card" class="results-card"><div class="results-header"><h2>Your curated matches</h2><span id="result-count"></span></div><div id="best-picks" class="best-picks"></div><div id="product-grid" class="product-grid"></div></section>
       </div>
     </main>
   </div>
@@ -529,12 +548,14 @@ HTML_PAGE = r"""<!doctype html>
     const guidanceEl = document.getElementById('guidance-content');
     const guidanceStateEl = document.getElementById('guidance-state');
     const resultsCardEl = document.getElementById('results-card');
+    const bestPicksEl = document.getElementById('best-picks');
     const productGridEl = document.getElementById('product-grid');
     const resultCountEl = document.getElementById('result-count');
     const inputEl = document.getElementById('message-input');
     const sendButtonEl = document.getElementById('send-button');
 
     function escapeHtml(value) {
+      if (value && typeof value === 'object') value = JSON.stringify(value);
       return String(value ?? '').replace(/[&<>'"]/g, character => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
       }[character]));
@@ -557,6 +578,18 @@ HTML_PAGE = r"""<!doctype html>
     function renderGuidance(data) {
       const requirements = data.requirements;
       const missing = data.missing_required_information || [];
+      if (requirements?.attributes) {
+        Object.assign(requirements, requirements.attributes);
+        delete requirements.attributes;
+      }
+      if (requirements?.no_preference_fields?.length) {
+        requirements.no_preference_fields.forEach(field => {
+          const normalized = String(field).replaceAll('_', ' ').trim().toLowerCase();
+          const displayName = normalized === 'shoe size' ? 'size' : normalized;
+          requirements[displayName] = 'any';
+        });
+        delete requirements.no_preference_fields;
+      }
       if (!requirements && !missing.length) {
         guidanceStateEl.textContent = 'Waiting';
         guidanceEl.innerHTML = 'Start with the product you want to buy. Muse will recommend the details that matter.';
@@ -576,9 +609,37 @@ HTML_PAGE = r"""<!doctype html>
       return '✦';
     }
 
+    function renderBestPicks(data) {
+      const picks = data.best_picks || [];
+      if (!picks.length) {
+        bestPicksEl.innerHTML = '';
+        return;
+      }
+      const tierLabels = {overall: '🥇 Best overall', value: '💰 Best value', upgrade: '⭐ Best upgrade'};
+      const activeTier = picks.some(pick => pick.tier === window.activeBestPickTier) ? window.activeBestPickTier : picks[0].tier;
+      window.activeBestPickTier = activeTier;
+      const activePick = picks.find(pick => pick.tier === activeTier) || picks[0];
+      const product = activePick.product || {};
+      const rating = product.rating == null ? 'No rating' : `${Number(product.rating).toFixed(1)}★`;
+      const reasons = (activePick.reasons || []).slice(0, 3).map(reason => escapeHtml(reason)).join(' · ');
+      const tabs = ['overall', 'value', 'upgrade'].map(tier => {
+        const pick = picks.find(item => item.tier === tier);
+        return `<button type="button" class="best-pick-tab ${tier === activeTier ? 'active' : ''}" data-best-tier="${tier}" ${pick ? '' : 'disabled'}>${tierLabels[tier]}</button>`;
+      }).join('');
+      bestPicksEl.innerHTML = `<div class="best-pick-tabs">${tabs}</div><div class="best-pick-panel"><article class="best-pick-card"><div class="best-pick-content"><div class="best-pick-top"><span class="best-pick-tier">${tierLabels[activePick.tier] || escapeHtml(activePick.tier)}</span><span>${Number(activePick.match_pct)}% ${escapeHtml(activePick.match_label)}</span></div><h3>${escapeHtml(product.title)}</h3><div class="best-pick-price">${escapeHtml(product.currency)} ${Number(product.price).toFixed(2)}</div><div class="best-pick-meta"><span class="product-badge">${rating}</span><span class="product-badge">${escapeHtml(product.platform)}</span></div><div class="best-pick-headline">${escapeHtml(activePick.headline)}</div>${reasons ? `<div class="best-pick-reasons">${reasons}</div>` : ''}</div><a class="best-pick-link" href="${escapeHtml(product.url)}" target="_blank" rel="noopener">Open product</a></article></div>`;
+      if (!picks.some(pick => pick.tier === 'upgrade')) {
+        bestPicksEl.insertAdjacentHTML('beforeend', '<div class="best-pick-unavailable">No meaningful upgrade found within your current requirements.</div>');
+      }
+      bestPicksEl.querySelectorAll('[data-best-tier]').forEach(button => button.addEventListener('click', () => {
+        window.activeBestPickTier = button.dataset.bestTier;
+        renderBestPicks(data);
+      }));
+    }
+
     function renderProducts(data) {
       const products = data.products || [];
-      if (!products.length) {
+      const bestPicks = data.best_picks || [];
+      if (!products.length && !bestPicks.length) {
         resultsCardEl.classList.remove('visible');
         return;
       }
@@ -600,6 +661,7 @@ HTML_PAGE = r"""<!doctype html>
     function render(data) {
       renderMessages(data.messages || []);
       renderGuidance(data);
+      renderBestPicks(data);
       renderProducts(data);
       const dot = document.getElementById('status-dot');
       const status = document.getElementById('status-text');
@@ -607,7 +669,7 @@ HTML_PAGE = r"""<!doctype html>
       status.textContent = `${data.groq_configured ? `Groq connected · ${data.model}` : 'Groq key missing'} · ${data.searchapi_configured ? 'SearchAPI connected' : 'SearchAPI key missing'}`;
       document.getElementById('model-pill').textContent = data.groq_configured ? data.model : 'Local demo semantics';
       if (data.last_error) {
-        guidanceEl.insertAdjacentHTML('beforeend', `<div class="error-note">The last operation needs attention. You can retry the message.</div>`);
+        guidanceEl.insertAdjacentHTML('beforeend', `<div class="error-note">The last operation needs attention. You can retry the message.<details style="margin-top:8px"><summary>Technical details</summary><pre style="white-space:pre-wrap;margin:7px 0 0">${escapeHtml(data.last_error)}</pre></details></div>`);
       }
     }
 

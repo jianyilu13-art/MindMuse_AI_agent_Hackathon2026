@@ -149,6 +149,8 @@ class SearchAPIClient:
 
 def build_shopping_query(requirements: UserRequirements) -> str:
     query = requirements.query or ""
+    if requirements.size:
+        query += " size " + requirements.size
     if requirements.attributes:
         query += " " + " ".join(f"{name} {value}" for name, value in requirements.attributes.items())
     if requirements.must_have:
@@ -186,7 +188,17 @@ def normalize_shopping_result(item: dict[str, Any], index: int = 0) -> Product |
     except (TypeError, ValueError):
         count = 0
     identifier = str(item.get("product_id") or item.get("id") or sha1(f"{title}|{url}|{index}".encode()).hexdigest()[:16])
-    raw_attributes = {"delivery": item.get("delivery"), "condition": item.get("condition"), "brand": item.get("brand")}
+    sizes_value = _first_present(item, "sizes", "available_sizes", "size", "variants")
+    if isinstance(sizes_value, (list, tuple, set)):
+        sizes_value = ", ".join(str(size) for size in sizes_value)
+    elif isinstance(sizes_value, dict):
+        sizes_value = ", ".join(str(size) for size in sizes_value.keys())
+    raw_attributes = {
+        "delivery": item.get("delivery"),
+        "condition": item.get("condition"),
+        "brand": item.get("brand"),
+        "sizes": sizes_value,
+    }
     if rating is not None:
         rating = min(max(rating, 0), 5)
     stock_value = item.get("stock") if item.get("stock") is not None else item.get("stock_count")

@@ -47,10 +47,17 @@ blocking the search. Only record ranking priorities explicitly stated by the sho
 rating, reviews, or delivery speed). If none are stated, leave ranking_priorities empty. Record an explicit "I don't care" or
 "any is fine", "no preference", "doesn't matter", or "I don't know" in no_preference_fields.
 Treat those phrases as an explicit lack of preference, not as a value to invent. For a required
-field, allow no preference only when a useful search can still be performed without it; otherwise
-keep asking for that field. Preserve known values unless the shopper changes them.
+field, treat an explicit "any" or "no preference" as an answered field with no constraint.
+For example, for a shoe-size question, "any size" means the shopper accepts any size: clear
+the size value, remove size from missing_required_information, and do not ask for it again.
+Preserve known values unless the shopper changes them.
 Do not invent prices, dates, sizes, or preferences. When asked to generate a clarification,
 use the supplied assessment and ask only for missing required information.
+If the shopper changes to a different product category, start a fresh requirement set for
+that category and do not copy category-specific values such as shoe size, storage capacity,
+or furniture dimensions from the current requirements. Only keep such a value if the shopper
+states it again in the latest message. If the shopper says any/no preference for a field,
+clear the previous value for that field.
 
 Shopper message: {message}
 Current requirements: {current_requirements}

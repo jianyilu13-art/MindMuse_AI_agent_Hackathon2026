@@ -28,6 +28,14 @@ def state_to_view(state: ShoppingState) -> dict[str, Any]:
         product_data["reasons"] = item.reasons if item else []
         products.append(product_data)
 
+    best_picks = []
+    for pick in state.get("best_picks", []):
+        pick_data = pick.model_dump(mode="json")
+        ranked_item = ranked_by_id.get(pick.product.id)
+        if not pick_data.get("reasons"):
+            pick_data["reasons"] = ranked_item.reasons if ranked_item else []
+        best_picks.append(pick_data)
+
     return {
         "assistant_message": state.get("assistant_message"),
         "finished": state.get("finished", False),
@@ -39,6 +47,7 @@ def state_to_view(state: ShoppingState) -> dict[str, Any]:
         ),
         "optional_preferences": state.get("optional_preferences", []),
         "products": products,
+        "best_picks": best_picks,
         "search_result_status": state.get(
             "search_result_status",
             "not_searched",

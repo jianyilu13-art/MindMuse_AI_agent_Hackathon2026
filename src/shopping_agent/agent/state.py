@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-from shopping_agent.schemas import CommunityFeedbackSummary, Product, RankedProduct, ReviewSummary, UserRequirements
+from shopping_agent.schemas import BestPick, CommunityFeedbackSummary, Product, RankedProduct, ReviewSummary, UserRequirements
 from shopping_agent.tools.add_to_cart import CartResult
 
 
@@ -48,6 +48,7 @@ class ShoppingState(TypedDict):
     review_error: str | None
     ranking_status: RankingStatus
     ranked_products: list[RankedProduct]
+    best_picks: list[BestPick]
     displayed_products: list[Product]
     conversation_turns: list[dict[str, str]]
 
@@ -89,6 +90,7 @@ def initial_state(message: str = "") -> ShoppingState:
         "review_error": None,
         "ranking_status": "not_needed",
         "ranked_products": [],
+        "best_picks": [],
         "displayed_products": [],
         "conversation_turns": [],
         "display_offset": 0,
