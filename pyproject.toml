@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shopping-agent"
+version = "0.1.0"
+description = "An AI-assisted shopping agent"
+requires-python = ">=3.10"
+dependencies = [
+    "boto3>=1.35.0",
+    "groq>=1.0.0",
+    "langgraph>=0.2.0",
+    "pydantic>=2.7.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "-p no:launch_testing"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
