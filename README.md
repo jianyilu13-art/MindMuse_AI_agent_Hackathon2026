@@ -298,3 +298,9 @@ on the next user turn.
 - `src/shopping_agent/processing/` — deterministic product processing, including hard-constraint filtering and ranking.
 - `src/shopping_agent/schemas/` — typed data structures for requirements, products, and reviews.
 - `src/shopping_agent/platforms/` — platform-specific marketplace implementations, to be added by adapters.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for the
+full text. You are free to use, modify, and distribute the code, provided the
+copyright notice and permission notice are retained.
