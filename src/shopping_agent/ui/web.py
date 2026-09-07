@@ -326,9 +326,10 @@ class ShoppingHTTPServer(ThreadingHTTPServer):
     application: ShoppingApplication
 
 
-def run(host: str = "127.0.0.1", port: int = 8000) -> None:
+def run(host: str = "0.0.0.0", port: int | None = None) -> None:
     """Start the local shopping UI server."""
 
+    port = port if port is not None else int(os.getenv("PORT", "8000"))
     application = ShoppingApplication()
     server = ShoppingHTTPServer((host, port), ShoppingRequestHandler)
     server.application = application

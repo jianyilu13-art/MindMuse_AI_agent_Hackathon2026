@@ -89,6 +89,48 @@ class GroqModel:
         return self.ask(user_prompt, system_prompt=system_prompt)
 
 
+class BedrockModel:
+    """Generate responses with an Amazon Bedrock Converse-compatible model."""
+
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        region: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 1_024,
+        client: object | None = None,
+    ) -> None:
+        load_dotenv()
+        self.model = model or os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+        self.region = region or os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.client = client
+
+    def generate(self, system_prompt: str, user_prompt: str) -> str:
+        """Generate a response through Bedrock's Converse API."""
+        if self.client is None:
+            import boto3
+
+            self.client = boto3.client("bedrock-runtime", region_name=self.region)
+
+        response = self.client.converse(
+            modelId=self.model,
+            system=[{"text": system_prompt}],
+            messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+            inferenceConfig={
+                "temperature": self.temperature,
+                "maxTokens": self.max_tokens,
+            },
+        )
+        content = response.get("output", {}).get("message", {}).get("content", [])
+        text = "".join(item.get("text", "") for item in content if item.get("text"))
+        if not text:
+            raise RuntimeError("Bedrock returned an empty response.")
+        return text
+
+
 DEFAULT_SHOPPING_SYSTEM_PROMPT = """You are a helpful shopping assistant.
 Ask a short follow-up question when a requirement is missing. Never invent
 product prices, stock, shipping dates, or review scores; use only product data

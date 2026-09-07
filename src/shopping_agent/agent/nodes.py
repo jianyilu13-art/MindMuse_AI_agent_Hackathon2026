@@ -8,7 +8,7 @@ from math import inf
 import os
 from time import monotonic
 
-from shopping_agent.llm.model import GroqModel
+from shopping_agent.llm.model import BedrockModel, GroqModel
 from shopping_agent.llm.parsing import GroqShoppingSemantics, ShoppingSemantics
 from shopping_agent.processing import apply_hard_constraints, deduplicate_products, rank_products
 from shopping_agent.tools import AddToCartTool, MockAddToCartTool, MockProductSearchTool, MockReviewTool, ProductSearchTool, ReviewTool
@@ -35,6 +35,7 @@ class ShoppingServices:
     @classmethod
     def from_environment(cls, semantics: ShoppingSemantics | None = None) -> "ShoppingServices":
         """Use SearchAPI in the application runtime; mocks remain explicit for tests."""
+        semantics = semantics or _semantics_from_environment()
         mode = os.getenv("SHOPPING_TOOL_MODE", "searchapi").strip().lower()
         if mode == "mock":
             return cls.mock(semantics)
@@ -47,10 +48,19 @@ class ShoppingServices:
                 SearchAPIProductSearchTool(client),
                 SearchAPIReviewTool(),
                 OpenProductLinkTool(),
-                semantics or GroqShoppingSemantics(GroqModel()),
+                semantics,
                 SearchAPICommunityFeedbackTool(client),
             )
         raise ValueError("SHOPPING_TOOL_MODE must be either 'searchapi' or 'mock'.")
+
+
+def _semantics_from_environment() -> ShoppingSemantics:
+    provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
+    if provider == "bedrock":
+        return GroqShoppingSemantics(BedrockModel())
+    if provider == "groq":
+        return GroqShoppingSemantics(GroqModel())
+    raise ValueError("LLM_PROVIDER must be either 'groq' or 'bedrock'.")
 
 
 class ShoppingNodes:

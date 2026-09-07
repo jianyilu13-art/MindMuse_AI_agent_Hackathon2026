@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Muse shopping assistant using Bedrock and a Lambda Function URL.
+
+Parameters:
+  SearchApiKey:
+    Type: String
+    NoEcho: true
+    Description: SearchAPI.io key used for live product search.
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 1024
+    Runtime: python3.13
+
+Resources:
+  ShoppingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: shopping_agent.lambda_function.handler
+      CodeUri: src/
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:Converse
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: '*'
+      Environment:
+        Variables:
+          LLM_PROVIDER: bedrock
+          BEDROCK_MODEL_ID: amazon.nova-lite-v1:0
+          SHOPPING_TOOL_MODE: searchapi
+          SEARCHAPI_API_KEY: !Ref SearchApiKey
+
+Outputs:
+  ShoppingFunctionUrl:
+    Description: Public URL for the Muse shopping assistant
+    Value: !GetAtt ShoppingFunctionUrl.FunctionUrl

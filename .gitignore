@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 .vscode/
+.aws-sam/
+samconfig.toml
+converse.json
 
 .env
 .env.*
