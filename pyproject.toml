@@ -1,11 +1,12 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]   # PEP 639 string form of `license`
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "shopping-agent"
 version = "0.1.0"
 description = "An AI-assisted shopping agent"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "boto3>=1.35.0",
