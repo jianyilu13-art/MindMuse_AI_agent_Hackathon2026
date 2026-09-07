@@ -6,7 +6,7 @@
 
 MindMuse is the project name; **Muse** is the shopper-facing assistant. Muse does more than generate a one-off answer: it maintains shopping context, identifies missing information, chooses the next operation, searches live product data, applies hard constraints, ranks qualified products, and supports follow-up actions such as comparison, pagination, and product selection.
 
-The project combines **LangGraph**, **Groq-hosted language models**, **SearchAPI**, and deterministic Python decision logic. A browser interface and a command-line interface are both included.
+The project combines **LangGraph**, **Amazon Bedrock**, **SearchAPI**, and deterministic Python decision logic. A browser interface and a command-line interface are both included.
 
 ## Motivation
 
@@ -25,7 +25,7 @@ MindMuse is designed around four needs:
 
 Muse treats shopping as a stateful, tool-using workflow:
 
-- A Groq-hosted LLM classifies each user turn and converts natural language into typed shopping requirements.
+- An Amazon Bedrock-hosted LLM classifies each user turn and converts natural language into typed shopping requirements.
 - A LangGraph controller inspects the shared state after every operation and decides what should happen next.
 - SearchAPI supplies live Google Shopping results and optional public community/forum sources.
 - Deterministic processing removes duplicates, enforces hard constraints, and calculates a transparent ranking.
@@ -132,7 +132,7 @@ flowchart LR
     GRAPH --> SEM[Semantic boundary]
     GRAPH --> TOOLS[Tool boundary]
     GRAPH --> PROC[Deterministic processing]
-    SEM --> GROQ[Groq API]
+    SEM --> BEDROCK[Amazon Bedrock Runtime]
     TOOLS --> SEARCH[SearchAPI / mocks]
     TOOLS --> ADAPTERS[Marketplace adapter contracts]
     PROC --> SCHEMAS[Provider-neutral Pydantic schemas]
@@ -143,7 +143,7 @@ flowchart LR
 | Layer | Purpose |
 | --- | --- |
 | `agent/` | Shared state, graph construction, routing, prompts, and state-transition nodes. |
-| `llm/` | Groq access and the natural-language-to-structured-state boundary. |
+| `llm/` | Amazon Bedrock access and the natural-language-to-structured-state boundary. |
 | `processing/` | Deduplication, hard-constraint filtering, and transparent scoring. |
 | `schemas/` | Typed contracts for requirements, products, reviews, community evidence, and best picks. |
 | `tools/` | Stable tool protocols and local mock implementations. |
@@ -153,103 +153,248 @@ flowchart LR
 
 ## Getting Started
 
-### Prerequisites
+The recommended setup uses [`uv`](https://docs.astral.sh/uv/). It installs a compatible Python version, creates `.venv`, and installs the locked dependencies, so a separate system-wide Python installation is not required.
 
-- Python **3.10 or newer**
-- A [Groq](https://console.groq.com/keys) API key and a model available to your Groq account
-- A [SearchAPI](https://www.searchapi.io/) API key for live product search
-- [`uv`](https://docs.astral.sh/uv/) is recommended; standard `pip` is also supported
+You will need:
 
-### 1. Install the project
+- Git, or a downloaded ZIP of this repository;
+- an AWS account with Amazon Bedrock access;
+- one AWS credential method described below;
+- a Converse-compatible Bedrock model;
+- a [SearchAPI](https://www.searchapi.io/) key for live product search. SearchAPI is not required in mock commerce mode.
 
-From the repository root:
+### Windows 10/11 — complete PowerShell setup
 
-```bash
-uv sync
+Run the following commands in **PowerShell**, not inside the Python interpreter.
+
+#### 1. Install Git and uv
+
+Windows Package Manager (`winget`) is the simplest option:
+
+```powershell
+winget install --id Git.Git -e --source winget
+winget install --id astral-sh.uv -e
 ```
 
-Alternatively, with `pip`:
+Close PowerShell, open a new PowerShell window, and verify both commands:
 
-```bash
-python -m venv .venv
-python -m pip install -e ".[test]"
+```powershell
+git --version
+uv --version
 ```
 
-Activate the virtual environment before using the `pip` commands below. On PowerShell run `.venv\Scripts\Activate.ps1`; on macOS or Linux run `source .venv/bin/activate`.
+If `winget` is unavailable, install [Git for Windows](https://git-scm.com/install/windows) manually and install uv with its official PowerShell installer:
 
-### 2. Configure environment variables
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
-Copy the example file:
+Open a new PowerShell window after installation so the updated `PATH` is loaded.
+
+#### 2. Download the project
+
+Choose a directory in which to keep the project, then clone the verified repository URL:
+
+```powershell
+Set-Location "$HOME\Documents"
+git clone https://github.com/jianyilu13-art/MindMuse_AI_agent_Hackathon2026.git
+Set-Location ".\MindMuse_AI_agent_Hackathon2026"
+```
+
+If you already cloned the repository, do not clone it again. Enter the existing directory and update it instead:
+
+```powershell
+Set-Location "C:\path\to\MindMuse_AI_agent_Hackathon2026"
+git pull
+```
+
+Without Git, download the [main branch ZIP](https://github.com/jianyilu13-art/MindMuse_AI_agent_Hackathon2026/archive/refs/heads/main.zip), select **Extract All** in File Explorer, and enter the extracted directory:
+
+```powershell
+Set-Location "C:\path\to\MindMuse_AI_agent_Hackathon2026-main"
+```
+
+All remaining commands must be run from the directory containing `pyproject.toml`. Confirm that you are in the correct place:
+
+```powershell
+Test-Path .\pyproject.toml
+```
+
+The command must print `True`.
+
+#### 3. Install Python 3.12 and project dependencies
+
+```powershell
+uv python install 3.12
+uv sync --python 3.12
+uv run python --version
+```
+
+The last command should print `Python 3.12.x`. `uv sync` creates or updates `.venv` automatically; do not run `pip install` and do not activate `.venv` when following this path.
+
+#### 4. Obtain the required API credentials
+
+##### Amazon Bedrock
+
+For local development, the shortest setup is a Bedrock API key:
+
+1. Sign in to the [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/).
+2. Select the `us-east-1` Region in the AWS console.
+3. Open the model catalog or Chat/Text playground and confirm that **Amazon Nova Lite** can be selected.
+4. Open **API keys**, generate a key, and copy it immediately. AWS only displays the complete key once.
+
+The example configuration uses model ID `amazon.nova-lite-v1:0` in `us-east-1`. If you select another model or Region, copy its exact model or inference-profile ID and update both values together. The selected model must support the Bedrock Converse API.
+
+For an IAM user, AWS profile, or IAM role instead of a Bedrock API key, the principal needs at least `bedrock:InvokeModel` permission for the selected model. Boto3 automatically uses the standard AWS credential chain.
+
+##### SearchAPI
+
+Create an account at [SearchAPI](https://www.searchapi.io/), open its dashboard, and copy the API key. This key is used for Google Shopping results and optional community/forum searches; it is separate from the AWS credential.
+
+#### 5. Create and edit `.env`
+
+Create the private configuration file from the tracked example, then open it in Notepad:
 
 ```powershell
 Copy-Item .env.example .env
+notepad .env
+```
+
+For the Bedrock API-key path and live shopping search, make `.env` look like this and replace both placeholder secrets:
+
+```dotenv
+AWS_BEARER_TOKEN_BEDROCK=replace_with_your_bedrock_api_key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+
+SEARCHAPI_API_KEY=replace_with_your_searchapi_key
+SEARCHAPI_GL=sg
+SEARCHAPI_HL=en
+SHOPPING_TOOL_MODE=searchapi
+SEARCHAPI_MAX_PRODUCTS=12
+SEARCHAPI_FORUM_TOP_K=1
+```
+
+Do not add quotes around the keys. Save the file as `.env`, not `.env.txt`. `.env` is ignored by Git and must never be committed. If upgrading from the earlier Groq version, remove `GROQ_API_KEY` and `GROQ_MODEL`; they are no longer read by the application.
+
+For a configured AWS profile instead of a Bedrock API key, omit `AWS_BEARER_TOKEN_BEDROCK` and use:
+
+```dotenv
+AWS_PROFILE=your_profile_name
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+```
+
+You may create the local profile with the AWS CLI by running `aws configure --profile your_profile_name`. On EC2, ECS, or Lambda, prefer an attached IAM role and omit all AWS access keys from `.env`.
+
+#### 6. Verify the installation
+
+The automated tests do not call AWS or SearchAPI and therefore do not spend API credits:
+
+```powershell
+uv run pytest
+```
+
+All tests should pass before starting the application.
+
+#### 7. Start the Web application
+
+```powershell
+uv run python -m shopping_agent.ui
+```
+
+Wait until PowerShell prints:
+
+```text
+Shopping UI running at http://127.0.0.1:8000
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in a browser. Keep the PowerShell window open while using the application. Press `Ctrl+C` in that window to stop the server.
+
+The first chat message triggers the first real Bedrock request. A product search additionally triggers SearchAPI when `SHOPPING_TOOL_MODE=searchapi`.
+
+#### 8. Run the command-line interface instead
+
+Stop the Web server first, or open another PowerShell window in the project directory:
+
+```powershell
+uv run python -m shopping_agent.main
+```
+
+Type `exit` or `quit` to end the CLI session.
+
+### macOS and Linux — quick setup
+
+Install Git with your operating system package manager, then run:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+git clone https://github.com/jianyilu13-art/MindMuse_AI_agent_Hackathon2026.git
+cd MindMuse_AI_agent_Hackathon2026
+uv python install 3.12
+uv sync --python 3.12
+cp .env.example .env
+```
+
+Edit `.env` using the same values shown in the Windows section, then verify and start the application:
+
+```bash
+uv run pytest
+uv run python -m shopping_agent.ui
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and use `Ctrl+C` to stop the server.
+
+### Standard `pip` alternative
+
+Use this path only if Python 3.10 or newer is already installed and you do not want to use uv.
+
+On Windows PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+python -m pytest
+python -m shopping_agent.ui
 ```
 
 On macOS or Linux:
 
 ```bash
-cp .env.example .env
-```
-
-Set at least the following values for live search:
-
-```dotenv
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=your_available_groq_model
-SEARCHAPI_API_KEY=your_searchapi_api_key
-SHOPPING_TOOL_MODE=searchapi
-```
-
-Do not commit `.env` or any API key.
-
-### 3. Run the Web application
-
-```bash
-uv run python -m shopping_agent.ui
-```
-
-Or, if the package was installed with `pip`:
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+python -m pytest
 python -m shopping_agent.ui
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). The Web UI provides:
+### Setup troubleshooting
 
-- multi-turn chat;
-- a live view of extracted and missing requirements;
-- curated recommendation cards and ranking reasons;
-- Overall, Value, and Upgrade decision tabs;
-- public community-source availability;
-- paginated results and safe links to seller pages;
-- isolated in-memory browser sessions and a **New chat** action.
-
-Press `Ctrl+C` in the terminal to stop the server.
-
-### 4. Run the command-line agent
-
-```bash
-uv run python -m shopping_agent.main
-```
-
-Or with the active `pip` environment:
-
-```bash
-python -m shopping_agent.main
-```
-
-Type `exit` or `quit` to end the conversation.
+| Symptom | Resolution |
+| --- | --- |
+| `git` or `uv` is not recognized on Windows | Close and reopen PowerShell after installation, then run `git --version` and `uv --version`. |
+| `pyproject.toml` cannot be found | Use `Set-Location` to enter the cloned or extracted project directory before running `uv sync`. |
+| `NoCredentialsError` or “Unable to locate credentials” | Set a valid `AWS_BEARER_TOKEN_BEDROCK`, configure `AWS_PROFILE`, or attach an IAM role. Check that the API key has not expired. |
+| Bedrock returns `AccessDeniedException` | Grant `bedrock:InvokeModel` and confirm that the selected model is available to the AWS account. |
+| Bedrock returns a validation/resource error | Verify that `AWS_REGION` and `BEDROCK_MODEL_ID` refer to the same available, Converse-compatible model or inference profile. |
+| `SEARCHAPI_API_KEY is missing` | Add the SearchAPI key for live search, or use `SHOPPING_TOOL_MODE=mock`. |
+| The Web page does not open | Keep the server terminal running and open exactly `http://127.0.0.1:8000`. |
 
 ## Run with Local Mock Commerce Tools
 
-Mock mode keeps real LLM-based intent and requirement understanding, but replaces product search, review retrieval, and cart behavior with local deterministic data. A Groq key and model are still required for an interactive session; a SearchAPI key is not.
+Mock mode keeps real Bedrock-based intent and requirement understanding, but replaces product search, review retrieval, and cart behavior with local deterministic data. Bedrock credentials, a Region, and a model ID are still required for an interactive session; a SearchAPI key is not.
 
 Set this in `.env`:
 
 ```dotenv
 SHOPPING_TOOL_MODE=mock
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=your_available_groq_model
+AWS_BEARER_TOKEN_BEDROCK=your_bedrock_api_key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
 ```
 
 Then start either interface using the same commands above.
@@ -282,8 +427,12 @@ Exact wording varies because intent parsing and clarification generation use the
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `GROQ_API_KEY` | Interactive runtime | — | Authenticates LLM requests. |
-| `GROQ_MODEL` | Interactive runtime | — | Groq model ID available to the account. |
+| `AWS_BEARER_TOKEN_BEDROCK` | One local credential option | — | Bedrock API key for local development. The AWS console currently issues these keys with an expiration. |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Alternative credential option | — | Standard AWS credentials. Prefer temporary credentials or a role over long-lived credentials. |
+| `AWS_SESSION_TOKEN` | Temporary credentials only | — | Session token accompanying temporary AWS access keys. |
+| `AWS_PROFILE` | No | AWS SDK default | Name of a locally configured AWS profile. |
+| `AWS_REGION` | Interactive runtime | — | Region used to create the `bedrock-runtime` client. `AWS_DEFAULT_REGION` is also accepted. |
+| `BEDROCK_MODEL_ID` | Interactive runtime | — | Converse-compatible foundation model or inference profile ID. |
 | `SHOPPING_TOOL_MODE` | No | `searchapi` | `searchapi`/`real` for live aggregated search, or `mock` for local commerce data. |
 | `SEARCHAPI_API_KEY` | Live search | — | Authenticates SearchAPI requests. |
 | `SEARCHAPI_GL` | No | `sg` | Search country/region code and fallback currency context. |
@@ -362,7 +511,7 @@ Coverage includes:
 │   └── state.md
 ├── src/shopping_agent/
 │   ├── agent/          # LangGraph, router, nodes, prompts, shared state
-│   ├── llm/            # Groq client and structured semantic parsing
+│   ├── llm/            # Amazon Bedrock client and structured semantic parsing
 │   ├── platforms/      # Marketplace contracts and adapter templates
 │   ├── processing/     # Deduplication, filtering, and ranking
 │   ├── schemas/        # Provider-neutral Pydantic models
